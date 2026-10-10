@@ -6,7 +6,8 @@ import Animated, { FadeInDown, FadeOutDown } from 'react-native-reanimated';
 import { AppText } from './AppText';
 import { PressableScale } from './PressableScale';
 import { useCart } from '../context/CartContext';
-import { formatPrice, pluralize } from '../utils/format';
+import { pluralize } from '../utils/format';
+import { formatPrice } from '../utils/price';
 import { colors, layout, radius, shadows, spacing } from '../theme';
 
 interface FloatingCartBarProps {

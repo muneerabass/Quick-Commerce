@@ -6,8 +6,10 @@ const PREFIX = '@zipp/';
 export const StorageKeys = {
   authUser: `${PREFIX}auth_user`,
   authToken: `${PREFIX}auth_token`,
+  authRefreshToken: `${PREFIX}auth_refresh_token`,
   recentSearches: `${PREFIX}recent_searches`,
-  cart: `${PREFIX}cart`,
+  activeStoreId: `${PREFIX}active_store_id`,
+  adminActiveStoreId: `${PREFIX}admin_active_store_id`,
 } as const;
 
 /**

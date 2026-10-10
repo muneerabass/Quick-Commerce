@@ -2,13 +2,12 @@ import React, { useCallback } from 'react';
 import { StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 import { AppText } from './AppText';
 import { PressableScale } from './PressableScale';
-import { ProductImage } from './ProductImage';
-import { Category } from '../types';
+import { CategoryRef } from '../types';
 import { colors, layout, radius, spacing } from '../theme';
 
 interface CategoryCardProps {
-  category: Category;
-  onPress: (category: Category) => void;
+  category: CategoryRef;
+  onPress: (category: CategoryRef) => void;
   /** `rail` is the compact home-screen tile; `grid` is the taller Categories-tab card. */
   variant?: 'rail' | 'grid';
   style?: StyleProp<ViewStyle>;
@@ -24,7 +23,7 @@ export const CategoryCard = React.memo(function CategoryCard({
 
   const isRail = variant === 'rail';
   const tileWidth = isRail ? layout.categoryTileWidth : layout.categoryGridWidth;
-  const imageSize = isRail ? tileWidth * 0.7 : tileWidth * 0.56;
+  const emojiSize = isRail ? tileWidth * 0.45 : tileWidth * 0.4;
 
   return (
     <PressableScale
@@ -32,7 +31,7 @@ export const CategoryCard = React.memo(function CategoryCard({
       scaleTo={0.94}
       haptic="none"
       accessibilityRole="button"
-      accessibilityLabel={`${category.name} category, ${category.itemCount} items`}
+      accessibilityLabel={`${category.name} category, ${category.productCount} items`}
       style={[{ width: tileWidth }, style]}
     >
       <View
@@ -42,14 +41,9 @@ export const CategoryCard = React.memo(function CategoryCard({
           isRail ? styles.tileRail : styles.tileGrid,
         ]}
       >
-        <ProductImage
-          uri={category.image}
-          emoji={category.emoji}
-          size={imageSize}
-          tint={category.tint}
-          radiusToken="sm"
-          recyclingKey={category.id}
-        />
+        <AppText style={{ fontSize: emojiSize, lineHeight: emojiSize * 1.1 }}>
+          {category.emoji}
+        </AppText>
       </View>
 
       <AppText
@@ -63,7 +57,7 @@ export const CategoryCard = React.memo(function CategoryCard({
 
       {!isRail ? (
         <AppText variant="caption" color="textTertiary" center>
-          {category.itemCount} items
+          {category.productCount} items
         </AppText>
       ) : null}
     </PressableScale>
@@ -83,6 +77,5 @@ const styles = StyleSheet.create({
   tileGrid: { aspectRatio: 1.05, borderRadius: radius.lg },
   label: { fontWeight: '600', color: colors.text },
   labelRail: { marginTop: spacing.sm, minHeight: 30 },
-  // Two-line reservation keeps grid rows aligned when a name wraps.
   labelGrid: { marginTop: spacing.sm, marginBottom: 2, minHeight: 32 },
 });

@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -14,17 +14,19 @@ import {
   EmptyState,
   PressableScale,
 } from '../../components';
-import { FREE_DELIVERY_THRESHOLD, useCart } from '../../context/CartContext';
-import { CartItem } from '../../types';
-import { formatPrice, pluralize } from '../../utils/format';
+import { FREE_DELIVERY_THRESHOLD_PAISE, useCart } from '../../context/CartContext';
+import * as addressService from '../../services/addressService';
+import * as orderService from '../../services/orderService';
+import { Address, CartLine } from '../../types';
+import { pluralize } from '../../utils/format';
+import { formatPrice } from '../../utils/price';
 import { colors, layout, radius, shadows, spacing } from '../../theme';
 import type { MainStackParamList } from '../../navigation/types';
 
 type Navigation = NativeStackNavigationProp<MainStackParamList>;
 
-/** Progress toward the free-delivery threshold — a nudge, not a nag. */
 function FreeDeliveryBar({ subtotal, remaining }: { subtotal: number; remaining: number }) {
-  const progress = Math.min(subtotal / FREE_DELIVERY_THRESHOLD, 1);
+  const progress = Math.min(subtotal / FREE_DELIVERY_THRESHOLD_PAISE, 1);
   const unlocked = remaining === 0;
 
   return (
@@ -59,36 +61,58 @@ function FreeDeliveryBar({ subtotal, remaining }: { subtotal: number; remaining:
 
 export function CartScreen() {
   const navigation = useNavigation<Navigation>();
-  const { items, totals, clearCart } = useCart();
+  const { items, totals, clearCart, refresh } = useCart();
   const [isPlacing, setIsPlacing] = useState(false);
+  const [addresses, setAddresses] = useState<Address[]>([]);
+  const defaultAddress = addresses.find((a) => a.is_default) ?? addresses[0];
+
+  useEffect(() => {
+    const unsub = navigation.addListener('focus', () => {
+      void refresh();
+      addressService.listAddresses().then(setAddresses).catch(() => setAddresses([]));
+    });
+    return unsub;
+  }, [navigation, refresh]);
 
   const goToHome = useCallback(
     () => navigation.navigate('Tabs', { screen: 'Home' }),
     [navigation],
   );
 
+  const goToAddresses = useCallback(
+    () => navigation.navigate('AddressList', undefined),
+    [navigation],
+  );
+
   const handleClear = useCallback(() => {
     Alert.alert('Empty your cart?', 'This removes every item you have added.', [
       { text: 'Keep items', style: 'cancel' },
-      { text: 'Empty cart', style: 'destructive', onPress: clearCart },
+      { text: 'Empty cart', style: 'destructive', onPress: () => void clearCart() },
     ]);
   }, [clearCart]);
 
-  /** Checkout is intentionally a stub in Phase 1 — payment lands in Phase 2. */
-  const handleCheckout = useCallback(() => {
+  const handleCheckout = useCallback(async () => {
+    if (!defaultAddress) {
+      Alert.alert('Add a delivery address', 'Please add an address before placing an order.', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Add address', onPress: () => navigation.navigate('AddressForm', undefined) },
+      ]);
+      return;
+    }
     setIsPlacing(true);
-    setTimeout(() => {
+    try {
+      const order = await orderService.createOrder(defaultAddress.id);
+      await refresh();
+      navigation.navigate('OrderDetails', { orderId: order.id });
+    } catch (error) {
+      Alert.alert('Could not place order', error instanceof Error ? error.message : 'Try again.');
+    } finally {
       setIsPlacing(false);
-      Alert.alert(
-        'Checkout is coming soon',
-        'Address selection and payment arrive in the next release. Your cart has been kept.',
-        [{ text: 'Got it' }],
-      );
-    }, 700);
-  }, []);
+    }
+  }, [defaultAddress, navigation, refresh]);
 
   const renderItem = useCallback(
-    ({ item }: { item: CartItem }) => <CartItemRow item={item} />,
+    ({ item }: { item: CartLine }) => <CartItemRow line={item} />,
     [],
   );
 
@@ -104,7 +128,7 @@ export function CartScreen() {
           <EmptyState
             emoji="🛒"
             title="Your cart is empty"
-            message="Add some essentials and we'll have them at your door in ten minutes."
+            message="Add some essentials and we'll have them at your door in minutes."
             actionLabel="Start shopping"
             onActionPress={goToHome}
           />
@@ -143,34 +167,37 @@ export function CartScreen() {
 
       <Animated.FlatList
         data={items}
-        keyExtractor={(item) => item.product.id}
+        keyExtractor={(item) => item.id}
         renderItem={renderItem}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={
-          <FreeDeliveryBar
-            subtotal={totals.subtotal}
-            remaining={totals.amountToFreeDelivery}
-          />
+          <FreeDeliveryBar subtotal={totals.subtotal} remaining={totals.amountToFreeDelivery} />
         }
         ItemSeparatorComponent={ItemSeparator}
         ListFooterComponent={
           <View style={styles.footerBlock}>
             <CartSummary totals={totals} />
 
-            <View style={styles.noteCard}>
-              <Ionicons name="information-circle-outline" size={17} color={colors.textSecondary} />
-              <AppText variant="caption" color="textSecondary" style={styles.noteText}>
-                Delivering to Home · Dharampeth, Nagpur. Address selection arrives with checkout.
+            <PressableScale onPress={goToAddresses} scaleTo={0.985} haptic="none" style={styles.addressCard}>
+              <Ionicons name="location-outline" size={18} color={colors.primary} />
+              <View style={styles.addressCopy}>
+                <AppText variant="captionStrong">Delivering to</AppText>
+                <AppText variant="bodySmall" color="textSecondary" numberOfLines={2}>
+                  {defaultAddress
+                    ? `${defaultAddress.label} · ${defaultAddress.address_line1}, ${defaultAddress.city}`
+                    : 'Add a delivery address to continue'}
+                </AppText>
+              </View>
+              <AppText variant="button" color="primary">
+                Change
               </AppText>
-            </View>
+            </PressableScale>
           </View>
         }
-        // Rows re-flow smoothly when an item is removed mid-list.
         itemLayoutAnimation={LinearTransition.duration(220)}
       />
 
-      {/* Sits directly above the tab bar, which already carries the home-indicator inset. */}
       <View style={styles.checkoutBar}>
         <View style={styles.checkoutTotal}>
           <AppText variant="caption" color="textTertiary">
@@ -180,14 +207,14 @@ export function CartScreen() {
         </View>
 
         <Button
-          label="Proceed to checkout"
+          label="Place order"
           onPress={handleCheckout}
           loading={isPlacing}
           icon="arrow-forward"
           iconPosition="right"
           fullWidth={false}
           style={styles.checkoutButton}
-          accessibilityHint="Checkout is not available yet in this release"
+          accessibilityHint="Places the order with cash on delivery"
         />
       </View>
     </SafeAreaView>
@@ -220,11 +247,7 @@ const styles = StyleSheet.create({
   clearLabel: { marginLeft: spacing.xs },
   emptyWrap: { flex: 1, backgroundColor: colors.background, justifyContent: 'center' },
   listContent: { paddingTop: spacing.lg, paddingBottom: 190 },
-  itemSeparator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.border,
-    marginLeft: 84,
-  },
+  itemSeparator: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginLeft: 84 },
   deliveryCard: {
     marginHorizontal: layout.gutter,
     marginBottom: spacing.lg,
@@ -234,23 +257,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.primaryBorder,
   },
-  deliveryCardUnlocked: {
-    backgroundColor: colors.successSoft,
-    borderColor: 'rgba(18,160,92,0.25)',
-  },
+  deliveryCardUnlocked: { backgroundColor: colors.successSoft, borderColor: 'rgba(18,160,92,0.25)' },
   deliveryCopy: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md },
   deliveryText: { marginLeft: spacing.sm, flex: 1, fontWeight: '600' },
-  track: {
-    height: 5,
-    borderRadius: radius.pill,
-    backgroundColor: 'rgba(16,18,25,0.08)',
-    overflow: 'hidden',
-  },
+  track: { height: 5, borderRadius: radius.pill, backgroundColor: 'rgba(16,18,25,0.08)', overflow: 'hidden' },
   trackFill: { height: '100%', borderRadius: radius.pill },
   footerBlock: { paddingHorizontal: layout.gutter, paddingTop: spacing.lg },
-  noteCard: {
+  addressCard: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     marginTop: spacing.lg,
     padding: spacing.lg,
     borderRadius: radius.md,
@@ -258,7 +273,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  noteText: { marginLeft: spacing.sm, flex: 1, lineHeight: 16 },
+  addressCopy: { flex: 1, marginHorizontal: spacing.md },
   checkoutBar: {
     position: 'absolute',
     left: 0,

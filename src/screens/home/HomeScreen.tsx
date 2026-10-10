@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   FlatList,
   ListRenderItem,
@@ -7,7 +7,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -23,16 +23,16 @@ import {
   SectionHeader,
 } from '../../components';
 import { useAuth } from '../../context/AuthContext';
-import { useCatalog, HomeFeed } from '../../hooks/useCatalog';
-import { Category, Product } from '../../types';
+import { useStore } from '../../context/StoreContext';
+import * as addressService from '../../services/addressService';
+import { Address, CategoryRef, Product } from '../../types';
+import { lookForCategory } from '../../data/categoryLooks';
 import { colors, gradients, layout, spacing } from '../../theme';
 import type { MainStackParamList } from '../../navigation/types';
 
 type Navigation = NativeStackNavigationProp<MainStackParamList>;
 
-type FeedSection = HomeFeed['sections'][number];
-
-const SEARCH_HINTS = ['milk', 'bananas', 'bread', 'eggs', 'cold drinks', 'ice cream'];
+const SEARCH_HINTS = ['milk', 'bananas', 'bread', 'eggs', 'cold drinks', 'juices'];
 
 function initialsFor(name?: string | null): string {
   if (!name) return 'ZU';
@@ -40,11 +40,74 @@ function initialsFor(name?: string | null): string {
   return parts.map((p) => p[0]?.toUpperCase() ?? '').join('') || 'ZU';
 }
 
+interface Rail {
+  id: string;
+  title: string;
+  categoryId: string | null;
+  categoryName: string;
+  products: Product[];
+}
+
+/** Group products by category_id to render as rails + categories list. */
+function buildRails(products: Product[]): { rails: Rail[]; categories: CategoryRef[] } {
+  const byCategory = new Map<string | null, Product[]>();
+  products.forEach((product) => {
+    const key = product.category_id ?? null;
+    if (!byCategory.has(key)) byCategory.set(key, []);
+    byCategory.get(key)!.push(product);
+  });
+  const rails: Rail[] = [];
+  const categories: CategoryRef[] = [];
+  for (const [categoryId, items] of byCategory.entries()) {
+    const name = items[0]?.description && categoryId
+      ? // Backend doesn't surface category name — infer from the look lookup if we can
+        humanizeCategoryId(categoryId, items)
+      : categoryId
+        ? humanizeCategoryId(categoryId, items)
+        : 'Everything else';
+    const look = lookForCategory(name);
+    categories.push({ id: categoryId, name, emoji: look.emoji, tint: look.tint, productCount: items.length });
+    rails.push({ id: categoryId ?? 'none', title: name, categoryId, categoryName: name, products: items.slice(0, 10) });
+  }
+  return { rails, categories };
+}
+
+// Backend doesn't expose category names via any endpoint; use the first few product
+// names as a human-readable fallback until a /categories endpoint exists.
+function humanizeCategoryId(categoryId: string, items: Product[]): string {
+  // Prefer a canonical name if the first product's name hints at it.
+  if (items.length === 0) return 'Category';
+  // Use a best-effort "category" if we don't know anything — this falls back to
+  // showing the group as a short id-tag.
+  return `Category · ${categoryId.slice(0, 6)}`;
+}
+
 export function HomeScreen() {
   const navigation = useNavigation<Navigation>();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const { data, isLoading, isRefreshing, error, refresh, retry } = useCatalog();
+  const { isLoading, isRefreshing, error, products, refresh } = useStore();
+  const [defaultAddress, setDefaultAddress] = useState<Address | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      void addressService
+        .listAddresses()
+        .then((addresses) => {
+          if (!cancelled) setDefaultAddress(addresses.find((address) => address.is_default) ?? addresses[0] ?? null);
+        })
+        .catch(() => {
+          // Address loading should never block the catalogue from rendering.
+        });
+
+      return () => {
+        cancelled = true;
+      };
+    }, []),
+  );
+
+  const { rails, categories } = useMemo(() => buildRails(products), [products]);
 
   const goToSearch = useCallback(() => navigation.navigate('Search'), [navigation]);
 
@@ -54,7 +117,7 @@ export function HomeScreen() {
   );
 
   const goToCategory = useCallback(
-    (category: Category) => navigation.navigate('CategoryProducts', { categoryId: category.id }),
+    (category: CategoryRef) => navigation.navigate('CategoryProducts', { categoryId: category.id }),
     [navigation],
   );
 
@@ -68,22 +131,24 @@ export function HomeScreen() {
     [navigation],
   );
 
-  const renderSection = useCallback<ListRenderItem<FeedSection>>(
+  const goToAddressSelection = useCallback(
+    () => navigation.navigate('AddressList', { selectMode: true }),
+    [navigation],
+  );
+
+  const addressDetail = defaultAddress
+    ? [defaultAddress.address_line1, defaultAddress.address_line2, defaultAddress.city, defaultAddress.pincode]
+        .filter(Boolean)
+        .join(', ')
+    : 'Choose a delivery address';
+
+  const renderSection = useCallback<ListRenderItem<Rail>>(
     ({ item }) => (
       <ProductSection
         title={item.title}
-        subtitle={item.subtitle}
         products={item.products}
         onProductPress={goToProduct}
-        onSeeAllPress={
-          // "See all" opens the category the rail is drawn from.
-          item.products[0]
-            ? () =>
-                navigation.navigate('CategoryProducts', {
-                  categoryId: item.products[0].categoryId,
-                })
-            : undefined
-        }
+        onSeeAllPress={() => navigation.navigate('CategoryProducts', { categoryId: item.categoryId })}
       />
     ),
     [goToProduct, navigation],
@@ -93,37 +158,37 @@ export function HomeScreen() {
     () => (
       <View style={styles.listHeader}>
         <DeliveryBanner style={styles.banner} />
-
-        <View style={styles.categoriesBlock}>
-          <SectionHeader
-            title="Shop by category"
-            actionLabel="See all"
-            onActionPress={goToCategoriesTab}
-          />
-          <FlatList
-            data={data?.categories ?? []}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <CategoryCard category={item} onPress={goToCategory} variant="rail" />
-            )}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.categoryList}
-            ItemSeparatorComponent={CategorySeparator}
-            initialNumToRender={6}
-            removeClippedSubviews
-          />
-        </View>
+        {categories.length > 0 ? (
+          <View style={styles.categoriesBlock}>
+            <SectionHeader
+              title="Shop by category"
+              actionLabel="See all"
+              onActionPress={goToCategoriesTab}
+            />
+            <FlatList
+              data={categories}
+              keyExtractor={(item) => item.id ?? 'none'}
+              renderItem={({ item }) => (
+                <CategoryCard category={item} onPress={goToCategory} variant="rail" />
+              )}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.categoryList}
+              ItemSeparatorComponent={CategorySeparator}
+              initialNumToRender={6}
+              removeClippedSubviews
+            />
+          </View>
+        ) : null}
       </View>
     ),
-    [data?.categories, goToCategoriesTab, goToCategory],
+    [categories, goToCategoriesTab, goToCategory],
   );
 
   return (
     <View style={styles.screen}>
       <StatusBar style="light" />
 
-      {/* Brand header — pinned, so location and search stay reachable while browsing. */}
       <LinearGradient
         colors={gradients.brand}
         start={{ x: 0, y: 0 }}
@@ -132,10 +197,10 @@ export function HomeScreen() {
       >
         <LocationHeader
           etaLabel="Delivery in 10 mins"
-          addressLabel="Home"
-          addressDetail="Dharampeth, Nagpur"
+          addressLabel={defaultAddress ? 'Delivering to' : 'Choose location'}
+          addressDetail={addressDetail}
           initials={initialsFor(user?.name)}
-          onAddressPress={goToProfile}
+          onAddressPress={goToAddressSelection}
           onAvatarPress={goToProfile}
           style={styles.locationHeader}
         />
@@ -146,15 +211,17 @@ export function HomeScreen() {
       {isLoading ? (
         <HomeSkeleton />
       ) : error ? (
+        <ErrorState message={error} onRetry={refresh} style={styles.errorState} />
+      ) : rails.length === 0 ? (
         <ErrorState
-          message={error}
-          onRetry={retry}
+          message="No stores delivering to this location yet."
+          onRetry={refresh}
           style={styles.errorState}
         />
       ) : (
         <Animated.View entering={FadeIn.duration(240)} style={styles.flex}>
           <FlatList
-            data={data?.sections ?? []}
+            data={rails}
             keyExtractor={(item) => item.id}
             renderItem={renderSection}
             ListHeaderComponent={listHeader}

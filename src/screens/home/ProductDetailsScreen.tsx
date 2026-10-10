@@ -14,10 +14,10 @@ import {
   QuantitySelector,
 } from '../../components';
 import { useCart } from '../../context/CartContext';
-import { getCategoryById } from '../../data/categories';
-import { getProductById, getProductsByCategory } from '../../data/products';
+import { useStore } from '../../context/StoreContext';
+import { lookForCategory } from '../../data/categoryLooks';
 import { Product } from '../../types';
-import { formatCount, formatPrice } from '../../utils/format';
+import { formatPrice } from '../../utils/price';
 import { colors, layout, radius, shadows, spacing } from '../../theme';
 import type { MainStackParamList } from '../../navigation/types';
 
@@ -31,16 +31,17 @@ const HIGHLIGHTS = [
 
 export function ProductDetailsScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
-  const { getQuantity, addItem, decrementItem, totals } = useCart();
+  const { getQuantity, addItem, decrementByProductId, totals } = useCart();
+  const { getProductById, products } = useStore();
 
   const product = getProductById(route.params.productId);
 
   const related = useMemo(() => {
     if (!product) return [];
-    return getProductsByCategory(product.categoryId)
-      .filter((p) => p.id !== product.id)
+    return products
+      .filter((p) => p.id !== product.id && p.category_id === product.category_id)
       .slice(0, 10);
-  }, [product]);
+  }, [product, products]);
 
   const goToProduct = useCallback(
     (next: Product) => navigation.push('ProductDetails', { productId: next.id }),
@@ -67,14 +68,14 @@ export function ProductDetailsScreen({ navigation, route }: Props) {
   }
 
   const quantity = getQuantity(product.id);
-  const tint = getCategoryById(product.categoryId)?.tint ?? colors.surfaceMuted;
-  const categoryName = getCategoryById(product.categoryId)?.name ?? 'Groceries';
+  const inStock = product.quantity > 0;
+  const look = lookForCategory(product.category_id);
+  const tint = look.tint;
 
   return (
     <View style={styles.screen}>
       <StatusBar style="dark" />
 
-      {/* Floating back control keeps the hero image edge-to-edge. */}
       <View style={[styles.topBar, { top: insets.top + spacing.sm }]} pointerEvents="box-none">
         <PressableScale
           onPress={() => navigation.goBack()}
@@ -106,8 +107,8 @@ export function ProductDetailsScreen({ navigation, route }: Props) {
       >
         <View style={[styles.hero, { backgroundColor: tint, paddingTop: insets.top + 64 }]}>
           <ProductImage
-            uri={product.image}
-            emoji={product.emoji}
+            uri={product.image_url}
+            fallbackText={product.name}
             size={Math.min(layout.screenWidth * 0.62, 260)}
             tint={tint}
             radiusToken="lg"
@@ -116,61 +117,25 @@ export function ProductDetailsScreen({ navigation, route }: Props) {
         </View>
 
         <Animated.View entering={FadeInDown.duration(300)} style={styles.body}>
-          <AppText variant="caption" color="primary" style={styles.category}>
-            {categoryName.toUpperCase()}
-          </AppText>
-
           <AppText variant="heading1" style={styles.name}>
             {product.name}
           </AppText>
 
-          <AppText variant="bodySmall" color="textSecondary">
-            {product.quantity}
-          </AppText>
-
-          <View style={styles.metaRow}>
-            <View style={styles.ratingPill}>
-              <Ionicons name="star" size={12} color={colors.textInverse} />
-              <AppText variant="captionStrong" color="textInverse" style={styles.ratingText}>
-                {product.rating.toFixed(1)}
-              </AppText>
-            </View>
-            <AppText variant="caption" color="textTertiary" style={styles.ratingCount}>
-              {formatCount(product.ratingCount)} ratings
+          {product.description ? (
+            <AppText variant="bodySmall" color="textSecondary">
+              {product.description}
             </AppText>
-
-            <View style={styles.etaPill}>
-              <Ionicons name="flash" size={11} color={colors.textSecondary} />
-              <AppText variant="caption" color="textSecondary" style={styles.etaText}>
-                {product.deliveryEta}
-              </AppText>
-            </View>
-          </View>
+          ) : null}
 
           <View style={styles.divider} />
 
           <View style={styles.priceRow}>
             <View style={styles.priceBlock}>
-              <View style={styles.priceLine}>
-                <AppText variant="heading1">{formatPrice(product.price)}</AppText>
-                {product.originalPrice ? (
-                  <AppText variant="body" color="textTertiary" style={styles.strike}>
-                    {formatPrice(product.originalPrice)}
-                  </AppText>
-                ) : null}
-              </View>
+              <AppText variant="heading1">{formatPrice(product.price)}</AppText>
               <AppText variant="caption" color="textTertiary">
-                Inclusive of all taxes
+                Inclusive of all taxes · {product.quantity} in stock
               </AppText>
             </View>
-
-            {product.discount ? (
-              <View style={styles.discountTag}>
-                <AppText variant="captionStrong" color="textInverse">
-                  {product.discount}% OFF
-                </AppText>
-              </View>
-            ) : null}
           </View>
 
           <View style={styles.highlights}>
@@ -188,13 +153,6 @@ export function ProductDetailsScreen({ navigation, route }: Props) {
               </View>
             ))}
           </View>
-
-          <AppText variant="heading3" style={styles.sectionTitle}>
-            About this product
-          </AppText>
-          <AppText variant="body" color="textSecondary" style={styles.description}>
-            {product.description}
-          </AppText>
         </Animated.View>
 
         {related.length > 0 ? (
@@ -208,21 +166,20 @@ export function ProductDetailsScreen({ navigation, route }: Props) {
         ) : null}
       </ScrollView>
 
-      {/* Sticky buy bar — the primary action stays reachable however far the user scrolls. */}
       <View style={[styles.buyBar, { paddingBottom: Math.max(insets.bottom, spacing.lg) }]}>
         <View style={styles.buyPrice}>
           <AppText variant="bodyStrong">{formatPrice(product.price)}</AppText>
           <AppText variant="caption" color="textTertiary">
-            {product.quantity}
+            {inStock ? `${product.quantity} in stock` : 'Out of stock'}
           </AppText>
         </View>
 
         <QuantitySelector
           quantity={quantity}
           onAdd={() => addItem(product)}
-          onRemove={() => decrementItem(product.id)}
+          onRemove={() => decrementByProductId(product.id)}
           size="lg"
-          disabled={!product.inStock}
+          disabled={!inStock}
           addLabel="Add to cart"
           productName={product.name}
         />
@@ -264,40 +221,10 @@ const styles = StyleSheet.create({
   content: { flexGrow: 1 },
   hero: { alignItems: 'center', justifyContent: 'center', paddingBottom: spacing.xxxl },
   body: { paddingHorizontal: layout.gutter, paddingTop: spacing.xl },
-  category: { letterSpacing: 1, fontWeight: '800' },
-  name: { marginTop: spacing.sm, marginBottom: spacing.xs },
-  metaRow: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.md },
-  ratingPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.success,
-    borderRadius: radius.xs,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
-  },
-  ratingText: { marginLeft: 3 },
-  ratingCount: { marginLeft: spacing.sm },
-  etaPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginLeft: 'auto',
-    backgroundColor: colors.canvas,
-    borderRadius: radius.xs,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
-  },
-  etaText: { marginLeft: 3, fontWeight: '600' },
+  name: { marginBottom: spacing.sm },
   divider: { height: 1, backgroundColor: colors.border, marginVertical: spacing.xl },
   priceRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   priceBlock: { flex: 1 },
-  priceLine: { flexDirection: 'row', alignItems: 'baseline' },
-  strike: { textDecorationLine: 'line-through', marginLeft: spacing.md },
-  discountTag: {
-    backgroundColor: colors.primary,
-    borderRadius: radius.xs,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-  },
   highlights: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -320,8 +247,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   highlightTitle: { marginBottom: 2 },
-  sectionTitle: { marginTop: spacing.xxl, marginBottom: spacing.sm },
-  description: { lineHeight: 22 },
   related: { marginTop: spacing.xxxl },
   buyBar: {
     position: 'absolute',

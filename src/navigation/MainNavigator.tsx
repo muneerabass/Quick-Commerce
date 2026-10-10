@@ -4,15 +4,17 @@ import { BottomTabNavigator } from './BottomTabNavigator';
 import { SearchScreen } from '../screens/home/SearchScreen';
 import { ProductDetailsScreen } from '../screens/home/ProductDetailsScreen';
 import { CategoryProductsScreen } from '../screens/categories/CategoryProductsScreen';
+import { AddressListScreen } from '../screens/profile/AddressListScreen';
+import { AddressFormScreen } from '../screens/profile/AddressFormScreen';
+import { AddressMapPickerScreen } from '../screens/profile/AddressMapPickerScreen';
+import { OrderListScreen } from '../screens/orders/OrderListScreen';
+import { OrderDetailsScreen } from '../screens/orders/OrderDetailsScreen';
 import { colors } from '../theme';
 import type { MainStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<MainStackParamList>();
 
-/**
- * Screens pushed above the tabs. Anything that should cover the tab bar — search,
- * product details, and later checkout and order tracking — belongs here.
- */
+/** Screens pushed above the tabs. Checkout flow and account surfaces belong here. */
 export function MainNavigator() {
   return (
     <Stack.Navigator
@@ -26,11 +28,15 @@ export function MainNavigator() {
       <Stack.Screen
         name="Search"
         component={SearchScreen}
-        // Fading in keeps the focus on the input rather than on a sliding panel.
         options={{ animation: 'fade_from_bottom', animationDuration: 220 }}
       />
       <Stack.Screen name="ProductDetails" component={ProductDetailsScreen} />
       <Stack.Screen name="CategoryProducts" component={CategoryProductsScreen} />
+      <Stack.Screen name="AddressList" component={AddressListScreen} />
+      <Stack.Screen name="AddressForm" component={AddressFormScreen} />
+      <Stack.Screen name="AddressMapPicker" component={AddressMapPickerScreen} options={{ animation: 'slide_from_bottom' }} />
+      <Stack.Screen name="OrderList" component={OrderListScreen} />
+      <Stack.Screen name="OrderDetails" component={OrderDetailsScreen} />
     </Stack.Navigator>
   );
 }

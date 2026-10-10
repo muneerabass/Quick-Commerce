@@ -6,12 +6,13 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { AppText, EmptyState, PressableScale, ProductGrid } from '../../components';
-import { popularSearches } from '../../data/sections';
-import { searchProducts } from '../../data/products';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { useRecentSearches } from '../../hooks/useRecentSearches';
+import { useStore } from '../../context/StoreContext';
 import { Product } from '../../types';
 import { pluralize } from '../../utils/format';
+
+const popularSearches = ['milk', 'bread', 'eggs', 'rice', 'cola', 'juice'];
 import { colors, layout, radius, spacing, typography } from '../../theme';
 import type { MainStackParamList } from '../../navigation/types';
 
@@ -49,8 +50,16 @@ export function SearchScreen({ navigation, route }: Props) {
   const [query, setQuery] = useState(route.params?.initialQuery ?? '');
   const debouncedQuery = useDebouncedValue(query, 160);
   const { recent, addRecent, clearRecent } = useRecentSearches();
+  const { products } = useStore();
 
-  const results = useMemo(() => searchProducts(debouncedQuery), [debouncedQuery]);
+  // Backend has no /search endpoint; filter the active store's catalog client-side.
+  const results = useMemo(() => {
+    const q = debouncedQuery.trim().toLowerCase();
+    if (!q) return [];
+    return products.filter(
+      (p) => p.name.toLowerCase().includes(q) || (p.description ?? '').toLowerCase().includes(q),
+    );
+  }, [debouncedQuery, products]);
   const hasQuery = debouncedQuery.trim().length > 0;
 
   const goToProduct = useCallback(

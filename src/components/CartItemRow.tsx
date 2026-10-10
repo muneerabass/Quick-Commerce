@@ -4,61 +4,58 @@ import { AppText } from './AppText';
 import { ProductImage } from './ProductImage';
 import { QuantitySelector } from './QuantitySelector';
 import { useCart } from '../context/CartContext';
-import { getCategoryById } from '../data/categories';
-import { CartItem } from '../types';
-import { formatPrice } from '../utils/format';
+import { useStore } from '../context/StoreContext';
+import { CartLine } from '../types';
+import { formatPrice } from '../utils/price';
 import { colors, spacing } from '../theme';
 
 interface CartItemRowProps {
-  item: CartItem;
+  line: CartLine;
 }
 
-export const CartItemRow = React.memo(function CartItemRow({ item }: CartItemRowProps) {
-  const { addItem, decrementItem } = useCart();
-  const { product, quantity } = item;
+/**
+ * Row-rendered against a server cart line. Looks up the live product in StoreContext
+ * for its image + quantity-left, falling back to a plain row if the product is no
+ * longer stocked in the active store.
+ */
+export const CartItemRow = React.memo(function CartItemRow({ line }: CartItemRowProps) {
+  const { incrementLine, decrementLine } = useCart();
+  const { getProductById } = useStore();
+  const product = getProductById(line.product_id);
 
-  const handleAdd = useCallback(() => addItem(product), [addItem, product]);
-  const handleRemove = useCallback(() => decrementItem(product.id), [decrementItem, product.id]);
-
-  const tint = getCategoryById(product.categoryId)?.tint ?? colors.surfaceMuted;
-  const lineTotal = product.price * quantity;
-  const lineOriginal = (product.originalPrice ?? product.price) * quantity;
+  const handleAdd = useCallback(() => incrementLine(line), [incrementLine, line]);
+  const handleRemove = useCallback(() => decrementLine(line), [decrementLine, line]);
 
   return (
     <View style={styles.row}>
       <ProductImage
-        uri={product.image}
-        emoji={product.emoji}
+        uri={product?.image_url}
+        fallbackText={line.product_name}
         size={56}
-        tint={tint}
+        tint={colors.surfaceMuted}
         radiusToken="sm"
-        recyclingKey={product.id}
+        recyclingKey={line.id}
       />
 
       <View style={styles.details}>
         <AppText variant="bodySmall" numberOfLines={2} style={styles.name}>
-          {product.name}
+          {line.product_name}
         </AppText>
-        <AppText variant="caption" color="textTertiary" style={styles.quantity}>
-          {product.quantity}
+        <AppText variant="caption" color="textTertiary" style={styles.unit}>
+          {formatPrice(line.unit_price)} each
         </AppText>
       </View>
 
       <View style={styles.trailing}>
         <QuantitySelector
-          quantity={quantity}
+          quantity={line.quantity}
           onAdd={handleAdd}
           onRemove={handleRemove}
-          productName={product.name}
+          productName={line.product_name}
         />
 
         <View style={styles.priceBlock}>
-          <AppText variant="bodyStrong">{formatPrice(lineTotal)}</AppText>
-          {lineOriginal > lineTotal ? (
-            <AppText variant="caption" color="textTertiary" style={styles.strike}>
-              {formatPrice(lineOriginal)}
-            </AppText>
-          ) : null}
+          <AppText variant="bodyStrong">{formatPrice(line.line_total)}</AppText>
         </View>
       </View>
     </View>
@@ -74,8 +71,7 @@ const styles = StyleSheet.create({
   },
   details: { flex: 1, marginHorizontal: spacing.md },
   name: { fontWeight: '600' },
-  quantity: { marginTop: 2 },
+  unit: { marginTop: 2 },
   trailing: { alignItems: 'flex-end' },
   priceBlock: { alignItems: 'flex-end', marginTop: spacing.sm },
-  strike: { textDecorationLine: 'line-through', marginTop: 1 },
 });

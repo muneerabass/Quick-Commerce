@@ -7,31 +7,29 @@ import React, {
   useReducer,
 } from 'react';
 import { User } from '../types';
-import * as authService from '../services/authService';
+import * as auth from '../services/authService';
 import { storage, StorageKeys } from '../services/storage';
+import { onUnauthorized } from '../services/apiClient';
 
 interface AuthState {
-  /** True until the persisted session has been read from disk. */
   isBootstrapping: boolean;
   isAuthenticated: boolean;
   isSubmitting: boolean;
   user: User | null;
-  token: string | null;
 }
 
 type AuthAction =
-  | { type: 'bootstrapped'; payload: { user: User; token: string } | null }
+  | { type: 'bootstrapped'; payload: User | null }
   | { type: 'submitting'; payload: boolean }
-  | { type: 'authenticated'; payload: { user: User; token: string } }
+  | { type: 'authenticated'; payload: User }
   | { type: 'signedOut' }
-  | { type: 'userUpdated'; payload: Partial<User> };
+  | { type: 'userUpdated'; payload: User };
 
 const initialState: AuthState = {
   isBootstrapping: true,
   isAuthenticated: false,
   isSubmitting: false,
   user: null,
-  token: null,
 };
 
 function reducer(state: AuthState, action: AuthAction): AuthState {
@@ -41,112 +39,125 @@ function reducer(state: AuthState, action: AuthAction): AuthState {
         ...state,
         isBootstrapping: false,
         isAuthenticated: !!action.payload,
-        user: action.payload?.user ?? null,
-        token: action.payload?.token ?? null,
+        user: action.payload,
       };
     case 'submitting':
       return { ...state, isSubmitting: action.payload };
     case 'authenticated':
-      return {
-        ...state,
-        isSubmitting: false,
-        isAuthenticated: true,
-        user: action.payload.user,
-        token: action.payload.token,
-      };
+      return { ...state, isSubmitting: false, isAuthenticated: true, user: action.payload };
     case 'signedOut':
-      return { ...state, isAuthenticated: false, user: null, token: null, isSubmitting: false };
+      return { ...state, isAuthenticated: false, user: null, isSubmitting: false };
     case 'userUpdated':
-      return state.user ? { ...state, user: { ...state.user, ...action.payload } } : state;
+      return { ...state, user: action.payload };
     default:
       return state;
   }
 }
 
 interface AuthContextValue extends AuthState {
-  login: (phone: string) => Promise<void>;
-  signup: (input: { name: string; phone: string; email?: string }) => Promise<void>;
+  sendOtp: (phone: string) => Promise<void>;
+  verifyOtp: (phone: string, otp: string) => Promise<User>;
+  updateProfile: (name: string | null) => Promise<void>;
   logout: () => Promise<void>;
-  updateUser: (patch: Partial<User>) => Promise<void>;
+  refreshMe: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+async function clearSession() {
+  await storage.remove(
+    StorageKeys.authUser,
+    StorageKeys.authToken,
+    StorageKeys.authRefreshToken,
+  );
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState);
 
-  // Restore the persisted session once, on mount. The splash screen waits on this.
+  // Restore persisted session once at launch. The splash screen is held until this resolves.
   useEffect(() => {
     let cancelled = false;
-
     (async () => {
       const [user, token] = await Promise.all([
         storage.get<User>(StorageKeys.authUser),
         storage.get<string>(StorageKeys.authToken),
       ]);
       if (cancelled) return;
-      dispatch({ type: 'bootstrapped', payload: user && token ? { user, token } : null });
+      dispatch({ type: 'bootstrapped', payload: user && token ? user : null });
     })();
-
     return () => {
       cancelled = true;
     };
   }, []);
 
-  const persistSession = useCallback(async (session: authService.AuthSession) => {
-    await Promise.all([
-      storage.set(StorageKeys.authUser, session.user),
-      storage.set(StorageKeys.authToken, session.token),
-    ]);
-    dispatch({ type: 'authenticated', payload: session });
+  // Globally force sign-out if a refresh fails inside the API client.
+  useEffect(
+    () =>
+      onUnauthorized(() => {
+        dispatch({ type: 'signedOut' });
+      }),
+    [],
+  );
+
+  const sendOtp = useCallback(async (phone: string) => {
+    dispatch({ type: 'submitting', payload: true });
+    try {
+      await auth.sendOtp(phone);
+    } finally {
+      dispatch({ type: 'submitting', payload: false });
+    }
   }, []);
 
-  const login = useCallback(
-    async (phone: string) => {
-      dispatch({ type: 'submitting', payload: true });
-      try {
-        const session = await authService.login(phone);
-        await persistSession(session);
-      } catch (error) {
-        dispatch({ type: 'submitting', payload: false });
-        throw error;
-      }
-    },
-    [persistSession],
-  );
+  const verifyOtp = useCallback(async (phone: string, otp: string) => {
+    dispatch({ type: 'submitting', payload: true });
+    try {
+      const response = await auth.verifyOtp(phone, otp);
+      await Promise.all([
+        storage.set(StorageKeys.authToken, response.access_token),
+        storage.set(StorageKeys.authRefreshToken, response.refresh_token),
+        storage.set(StorageKeys.authUser, response.user),
+      ]);
+      dispatch({ type: 'authenticated', payload: response.user });
+      return response.user;
+    } catch (error) {
+      dispatch({ type: 'submitting', payload: false });
+      throw error;
+    }
+  }, []);
 
-  const signup = useCallback(
-    async (input: { name: string; phone: string; email?: string }) => {
-      dispatch({ type: 'submitting', payload: true });
-      try {
-        const session = await authService.signup(input);
-        await persistSession(session);
-      } catch (error) {
-        dispatch({ type: 'submitting', payload: false });
-        throw error;
-      }
-    },
-    [persistSession],
-  );
+  const updateProfile = useCallback(async (name: string | null) => {
+    const user = await auth.updateProfile(name);
+    await storage.set(StorageKeys.authUser, user);
+    dispatch({ type: 'userUpdated', payload: user });
+  }, []);
+
+  const refreshMe = useCallback(async () => {
+    try {
+      const user = await auth.getMe();
+      await storage.set(StorageKeys.authUser, user);
+      dispatch({ type: 'userUpdated', payload: user });
+    } catch {
+      // if /me fails, let the interceptor handle session death
+    }
+  }, []);
 
   const logout = useCallback(async () => {
-    await storage.remove(StorageKeys.authUser, StorageKeys.authToken);
+    const refreshToken = await storage.get<string>(StorageKeys.authRefreshToken);
+    if (refreshToken) {
+      try {
+        await auth.logout(refreshToken);
+      } catch {
+        // best-effort; local wipe still happens below
+      }
+    }
+    await clearSession();
     dispatch({ type: 'signedOut' });
   }, []);
 
-  const updateUser = useCallback(
-    async (patch: Partial<User>) => {
-      if (!state.user) return;
-      const next = { ...state.user, ...patch };
-      await storage.set(StorageKeys.authUser, next);
-      dispatch({ type: 'userUpdated', payload: patch });
-    },
-    [state.user],
-  );
-
   const value = useMemo<AuthContextValue>(
-    () => ({ ...state, login, signup, logout, updateUser }),
-    [state, login, signup, logout, updateUser],
+    () => ({ ...state, sendOtp, verifyOtp, updateProfile, logout, refreshMe }),
+    [state, sendOtp, verifyOtp, updateProfile, logout, refreshMe],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

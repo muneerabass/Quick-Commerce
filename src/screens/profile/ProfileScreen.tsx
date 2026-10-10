@@ -1,6 +1,8 @@
 import React, { useCallback } from 'react';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -8,52 +10,16 @@ import { AppText, PressableScale } from '../../components';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
 import { colors, layout, radius, spacing } from '../../theme';
+import type { MainStackParamList } from '../../navigation/types';
+
+type Navigation = NativeStackNavigationProp<MainStackParamList>;
 
 interface RowItem {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   caption?: string;
-  /** Phase 2 destinations. Until then each row explains what is coming. */
-  comingSoon?: string;
+  action: () => void;
 }
-
-interface Section {
-  title: string;
-  items: RowItem[];
-}
-
-const SECTIONS: Section[] = [
-  {
-    title: 'Account',
-    items: [
-      { icon: 'person-outline', label: 'My profile', caption: 'Name, phone and email', comingSoon: 'Profile editing' },
-      { icon: 'location-outline', label: 'My addresses', caption: 'Saved delivery locations', comingSoon: 'Address book' },
-      { icon: 'heart-outline', label: 'Saved items', caption: 'Products you bookmarked', comingSoon: 'Wishlists' },
-    ],
-  },
-  {
-    title: 'Orders',
-    items: [
-      { icon: 'receipt-outline', label: 'My orders', caption: 'Track and reorder', comingSoon: 'Order history' },
-      { icon: 'pricetags-outline', label: 'Offers & coupons', comingSoon: 'Coupons' },
-    ],
-  },
-  {
-    title: 'Support',
-    items: [
-      { icon: 'help-circle-outline', label: 'Help & support', comingSoon: 'Help centre' },
-      { icon: 'chatbubble-ellipses-outline', label: 'Contact us', comingSoon: 'Support chat' },
-    ],
-  },
-  {
-    title: 'App',
-    items: [
-      { icon: 'notifications-outline', label: 'Notifications', comingSoon: 'Notification settings' },
-      { icon: 'shield-checkmark-outline', label: 'Privacy policy', comingSoon: 'Privacy policy' },
-      { icon: 'document-text-outline', label: 'Terms & conditions', comingSoon: 'Terms' },
-    ],
-  },
-];
 
 function initialsFor(name?: string | null): string {
   if (!name) return 'ZU';
@@ -61,10 +27,10 @@ function initialsFor(name?: string | null): string {
   return parts.map((p) => p[0]?.toUpperCase() ?? '').join('') || 'ZU';
 }
 
-function SettingsRow({ item, onPress }: { item: RowItem; onPress: () => void }) {
+function SettingsRow({ item }: { item: RowItem }) {
   return (
     <PressableScale
-      onPress={onPress}
+      onPress={item.action}
       scaleTo={0.985}
       haptic="none"
       accessibilityRole="button"
@@ -72,50 +38,55 @@ function SettingsRow({ item, onPress }: { item: RowItem; onPress: () => void }) 
       style={styles.row}
     >
       <View style={styles.rowIcon}>
-        <Ionicons name={item.icon} size={19} color={colors.primary} />
+        <Ionicons name={item.icon} size={18} color={colors.textSecondary} />
       </View>
-
       <View style={styles.rowCopy}>
-        <AppText variant="bodyStrong">{item.label}</AppText>
+        <AppText variant="bodySmall" style={styles.rowLabel}>
+          {item.label}
+        </AppText>
         {item.caption ? (
-          <AppText variant="caption" color="textTertiary" style={styles.rowCaption}>
+          <AppText variant="caption" color="textTertiary">
             {item.caption}
           </AppText>
         ) : null}
       </View>
-
-      <Ionicons name="chevron-forward" size={17} color={colors.textTertiary} />
+      <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />
     </PressableScale>
   );
 }
 
 export function ProfileScreen() {
+  const navigation = useNavigation<Navigation>();
   const insets = useSafeAreaInsets();
   const { user, logout } = useAuth();
-  const { totals, clearCart } = useCart();
-
-  const handleRowPress = useCallback((item: RowItem) => {
-    Alert.alert(
-      item.label,
-      `${item.comingSoon ?? item.label} arrives in the next release.`,
-      [{ text: 'Got it' }],
-    );
-  }, []);
+  const { totals } = useCart();
 
   const handleLogout = useCallback(() => {
     Alert.alert('Log out of Zipp?', 'You can sign back in with the same number any time.', [
       { text: 'Stay logged in', style: 'cancel' },
-      {
-        text: 'Log out',
-        style: 'destructive',
-        onPress: () => {
-          // Clearing the cart on logout keeps the next account's session clean.
-          clearCart();
-          void logout();
-        },
-      },
+      { text: 'Log out', style: 'destructive', onPress: () => void logout() },
     ]);
-  }, [clearCart, logout]);
+  }, [logout]);
+
+  const sections: { title: string; items: RowItem[] }[] = [
+    {
+      title: 'Shopping',
+      items: [
+        { icon: 'receipt-outline', label: 'My orders', caption: 'Track and reorder', action: () => navigation.navigate('OrderList') },
+        { icon: 'location-outline', label: 'My addresses', caption: 'Saved delivery locations', action: () => navigation.navigate('AddressList', undefined) },
+      ],
+    },
+    {
+      title: 'Support',
+      items: [
+        {
+          icon: 'help-circle-outline',
+          label: 'Help & support',
+          action: () => Alert.alert('Help & support', 'Contact support@example.com for help.'),
+        },
+      ],
+    },
+  ];
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
@@ -141,13 +112,8 @@ export function ProfileScreen() {
               {user?.name ?? 'Zipp shopper'}
             </AppText>
             <AppText variant="bodySmall" color="textSecondary" numberOfLines={1}>
-              +91 {user?.phone ?? '—'}
+              {user?.phone ?? '—'}
             </AppText>
-            {user?.email ? (
-              <AppText variant="caption" color="textTertiary" numberOfLines={1}>
-                {user.email}
-              </AppText>
-            ) : null}
           </View>
         </Animated.View>
 
@@ -160,34 +126,28 @@ export function ProfileScreen() {
           </View>
           <View style={styles.statDivider} />
           <View style={styles.stat}>
-            <AppText variant="heading3">0</AppText>
-            <AppText variant="caption" color="textTertiary">
-              Orders
+            <AppText variant="heading3" numberOfLines={1}>
+              {user?.role ?? 'customer'}
             </AppText>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.stat}>
-            <AppText variant="heading3">₹0</AppText>
             <AppText variant="caption" color="textTertiary">
-              Saved
+              Role
             </AppText>
           </View>
         </View>
 
-        {SECTIONS.map((section, sectionIndex) => (
+        {sections.map((section, idx) => (
           <Animated.View
             key={section.title}
-            entering={FadeInDown.duration(280).delay(60 + sectionIndex * 50)}
+            entering={FadeInDown.duration(280).delay(60 + idx * 50)}
             style={styles.section}
           >
             <AppText variant="overline" color="textTertiary" style={styles.sectionTitle}>
               {section.title}
             </AppText>
-
             <View style={styles.card}>
               {section.items.map((item, index) => (
                 <View key={item.label}>
-                  <SettingsRow item={item} onPress={() => handleRowPress(item)} />
+                  <SettingsRow item={item} />
                   {index < section.items.length - 1 ? <View style={styles.rowDivider} /> : null}
                 </View>
               ))}
@@ -209,7 +169,7 @@ export function ProfileScreen() {
         </PressableScale>
 
         <AppText variant="caption" color="textTertiary" center style={styles.version}>
-          Zipp · Version 1.0.0 (Phase 1)
+          Zipp · Version 1.0.0
         </AppText>
       </ScrollView>
     </SafeAreaView>
@@ -224,14 +184,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: spacing.lg,
-    borderRadius: radius.lg,
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.primaryBorder,
+    borderColor: colors.border,
   },
   avatar: {
-    width: 58,
-    height: 58,
+    width: 60,
+    height: 60,
     borderRadius: radius.pill,
     backgroundColor: colors.primary,
     alignItems: 'center',
@@ -241,50 +201,37 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: spacing.lg,
     paddingVertical: spacing.lg,
+    marginVertical: spacing.lg,
+    backgroundColor: colors.canvas,
     borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   stat: { flex: 1, alignItems: 'center' },
   statDivider: { width: 1, height: 28, backgroundColor: colors.border },
-  section: { marginTop: spacing.xxl },
-  sectionTitle: { marginBottom: spacing.md, marginLeft: spacing.xs },
-  card: {
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    overflow: 'hidden',
-    backgroundColor: colors.surface,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minHeight: 60,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-  },
+  section: { marginTop: spacing.xl },
+  sectionTitle: { marginBottom: spacing.sm },
+  card: { backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' },
+  row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.lg },
   rowIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: radius.sm,
-    backgroundColor: colors.primarySoft,
+    width: 32,
+    height: 32,
+    borderRadius: radius.pill,
+    backgroundColor: colors.canvas,
     alignItems: 'center',
     justifyContent: 'center',
   },
   rowCopy: { flex: 1, marginHorizontal: spacing.md },
-  rowCaption: { marginTop: 1 },
-  rowDivider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginLeft: 66 },
+  rowLabel: { fontWeight: '600' },
+  rowDivider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginLeft: spacing.xxxl },
   logoutButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    height: 54,
-    marginTop: spacing.xxl,
+    marginTop: spacing.xl,
+    paddingVertical: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.error,
     borderRadius: radius.md,
-    borderWidth: 1.5,
-    borderColor: colors.errorSoft,
     backgroundColor: colors.errorSoft,
   },
   logoutLabel: { marginLeft: spacing.sm },

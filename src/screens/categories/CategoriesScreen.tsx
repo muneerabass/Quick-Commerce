@@ -7,8 +7,9 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { AppText, CategoryCard, EmptyState, FloatingCartBar } from '../../components';
-import { categories } from '../../data/categories';
-import { Category } from '../../types';
+import { useStore } from '../../context/StoreContext';
+import { lookForCategory } from '../../data/categoryLooks';
+import { CategoryRef } from '../../types';
 import { colors, layout, radius, spacing, typography } from '../../theme';
 import type { MainStackParamList } from '../../navigation/types';
 
@@ -16,16 +17,30 @@ type Navigation = NativeStackNavigationProp<MainStackParamList>;
 
 export function CategoriesScreen() {
   const navigation = useNavigation<Navigation>();
+  const { products } = useStore();
   const [filter, setFilter] = useState('');
+
+  const categories = useMemo<CategoryRef[]>(() => {
+    const groups = new Map<string | null, number>();
+    products.forEach((p) => {
+      const key = p.category_id ?? null;
+      groups.set(key, (groups.get(key) ?? 0) + 1);
+    });
+    return Array.from(groups.entries()).map(([id, count]) => {
+      const name = id ? `Category · ${id.slice(0, 6)}` : 'Everything else';
+      const look = lookForCategory(name);
+      return { id, name, emoji: look.emoji, tint: look.tint, productCount: count };
+    });
+  }, [products]);
 
   const filtered = useMemo(() => {
     const q = filter.trim().toLowerCase();
     if (!q) return categories;
     return categories.filter((c) => c.name.toLowerCase().includes(q));
-  }, [filter]);
+  }, [filter, categories]);
 
   const goToCategory = useCallback(
-    (category: Category) => navigation.navigate('CategoryProducts', { categoryId: category.id }),
+    (category: CategoryRef) => navigation.navigate('CategoryProducts', { categoryId: category.id }),
     [navigation],
   );
 
@@ -35,8 +50,7 @@ export function CategoriesScreen() {
   );
 
   const renderItem = useCallback(
-    ({ item, index }: { item: Category; index: number }) => (
-      // Staggered entrance, capped so later rows are not left waiting.
+    ({ item, index }: { item: CategoryRef; index: number }) => (
       <Animated.View entering={FadeInDown.duration(280).delay(Math.min(index, 8) * 35)}>
         <CategoryCard category={item} onPress={goToCategory} variant="grid" />
       </Animated.View>
@@ -81,7 +95,7 @@ export function CategoriesScreen() {
 
       <FlatList
         data={filtered}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => item.id ?? 'none'}
         renderItem={renderItem}
         numColumns={layout.categoryGridColumns}
         key={`cols-${layout.categoryGridColumns}`}

@@ -5,28 +5,27 @@ import { AppText } from './AppText';
 import { colors, radius } from '../theme';
 
 interface ProductImageProps {
-  uri: string;
-  /** Rendered on a tinted card if the remote image fails or is still unavailable. */
-  emoji: string;
+  /** Null / undefined falls back to a letter avatar on a tinted frame. */
+  uri?: string | null;
+  /** Shown as fallback when the uri is missing or fails to load. */
+  fallbackText: string;
   size: number;
-  /** Category tint used behind the emoji so the fallback still looks designed. */
   tint?: string;
   style?: StyleProp<ViewStyle>;
   contentFit?: 'cover' | 'contain';
   radiusToken?: keyof typeof radius;
-  /** Passed to expo-image so recycled list rows do not flash the previous image. */
   recyclingKey?: string;
 }
 
 /**
  * Product imagery with a guaranteed-graceful failure mode.
  *
- * A quick-commerce grid full of grey boxes reads as broken, so a failed load falls back
- * to a large emoji on a soft tint rather than to an empty frame.
+ * A quick-commerce grid full of grey boxes reads as broken, so a missing or failed
+ * image falls back to a bold initial on a soft tint instead of an empty frame.
  */
 export const ProductImage = React.memo(function ProductImage({
   uri,
-  emoji,
+  fallbackText,
   size,
   tint = colors.surfaceMuted,
   style,
@@ -35,6 +34,7 @@ export const ProductImage = React.memo(function ProductImage({
   recyclingKey,
 }: ProductImageProps) {
   const [failed, setFailed] = useState(false);
+  const showFallback = !uri || failed;
 
   const frame: ViewStyle = {
     width: size,
@@ -43,10 +43,13 @@ export const ProductImage = React.memo(function ProductImage({
     backgroundColor: tint,
   };
 
-  if (failed) {
+  if (showFallback) {
+    const initial = (fallbackText || '•').trim().charAt(0).toUpperCase();
     return (
       <View style={[styles.fallback, frame, style]} accessibilityRole="image">
-        <AppText style={{ fontSize: size * 0.42, lineHeight: size * 0.52 }}>{emoji}</AppText>
+        <AppText style={{ fontSize: size * 0.38, lineHeight: size * 0.5, fontWeight: '800', color: colors.textSecondary }}>
+          {initial}
+        </AppText>
       </View>
     );
   }
@@ -54,7 +57,7 @@ export const ProductImage = React.memo(function ProductImage({
   return (
     <View style={[styles.frame, frame, style]}>
       <Image
-        source={{ uri }}
+        source={{ uri: uri as string }}
         style={StyleSheet.absoluteFill}
         contentFit={contentFit}
         transition={220}
@@ -68,6 +71,6 @@ export const ProductImage = React.memo(function ProductImage({
 });
 
 const styles = StyleSheet.create({
-  frame: { overflow: 'hidden' },
   fallback: { alignItems: 'center', justifyContent: 'center' },
+  frame: { overflow: 'hidden' },
 });

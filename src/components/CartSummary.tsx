@@ -1,9 +1,8 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { AppText } from './AppText';
-import { CartTotals, FREE_DELIVERY_THRESHOLD } from '../context/CartContext';
-import { formatPrice } from '../utils/format';
+import { CartTotals, FREE_DELIVERY_THRESHOLD_PAISE } from '../context/CartContext';
+import { formatPrice } from '../utils/price';
 import { colors, radius, spacing } from '../theme';
 
 interface CartSummaryProps {
@@ -37,11 +36,6 @@ function Row({
       </View>
 
       <View style={styles.valueBlock}>
-        {free ? (
-          <AppText variant="caption" color="textTertiary" style={styles.strike}>
-            {formatPrice(25)}
-          </AppText>
-        ) : null}
         <AppText
           variant={strong ? 'bodyStrong' : 'bodySmall'}
           color={free ? 'success' : strong ? 'text' : 'text'}
@@ -53,7 +47,6 @@ function Row({
   );
 }
 
-/** Bill breakdown. Fee logic lives in CartContext so this stays presentational. */
 export const CartSummary = React.memo(function CartSummary({ totals }: CartSummaryProps) {
   return (
     <View style={styles.card}>
@@ -69,7 +62,7 @@ export const CartSummary = React.memo(function CartSummary({ totals }: CartSumma
         hint={
           totals.amountToFreeDelivery > 0
             ? `Add ${formatPrice(totals.amountToFreeDelivery)} more to save it`
-            : `Free above ${formatPrice(FREE_DELIVERY_THRESHOLD)}`
+            : `Free above ${formatPrice(FREE_DELIVERY_THRESHOLD_PAISE)}`
         }
       />
       <Row label="Handling charge" value={formatPrice(totals.handlingFee)} />
@@ -77,15 +70,6 @@ export const CartSummary = React.memo(function CartSummary({ totals }: CartSumma
       <View style={styles.divider} />
 
       <Row label="To pay" value={formatPrice(totals.total)} strong />
-
-      {totals.savings > 0 ? (
-        <View style={styles.savingsPill}>
-          <Ionicons name="pricetag" size={13} color={colors.success} />
-          <AppText variant="captionStrong" color="success" style={styles.savingsText}>
-            You saved {formatPrice(totals.savings)} on this order
-          </AppText>
-        </View>
-      ) : null}
     </View>
   );
 });
@@ -108,16 +92,5 @@ const styles = StyleSheet.create({
   labelBlock: { flex: 1, marginRight: spacing.lg },
   hint: { marginTop: 2 },
   valueBlock: { flexDirection: 'row', alignItems: 'center' },
-  strike: { textDecorationLine: 'line-through', marginRight: spacing.sm },
   divider: { height: 1, backgroundColor: colors.border, marginVertical: spacing.sm },
-  savingsPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.successSoft,
-    borderRadius: radius.sm,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    marginTop: spacing.md,
-  },
-  savingsText: { marginLeft: spacing.sm, flex: 1 },
 });
