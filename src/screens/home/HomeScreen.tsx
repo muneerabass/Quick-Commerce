@@ -3,6 +3,7 @@ import {
   FlatList,
   ListRenderItem,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   View,
 } from 'react-native';
@@ -13,6 +14,7 @@ import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import {
+  AppText,
   CategoryCard,
   DeliveryBanner,
   ErrorState,
@@ -28,6 +30,7 @@ import * as addressService from '../../services/addressService';
 import { Address, CategoryRef, Product } from '../../types';
 import { lookForCategory } from '../../data/categoryLooks';
 import { colors, gradients, layout, spacing } from '../../theme';
+import { API_BASE_URL } from '../../config/env';
 import type { MainStackParamList } from '../../navigation/types';
 
 type Navigation = NativeStackNavigationProp<MainStackParamList>;
@@ -86,7 +89,7 @@ export function HomeScreen() {
   const navigation = useNavigation<Navigation>();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const { isLoading, isRefreshing, error, products, refresh } = useStore();
+  const { isLoading, isRefreshing, error, products, refresh, setDeliveryAddress } = useStore();
   const [defaultAddress, setDefaultAddress] = useState<Address | null>(null);
 
   useFocusEffect(
@@ -95,7 +98,11 @@ export function HomeScreen() {
       void addressService
         .listAddresses()
         .then((addresses) => {
-          if (!cancelled) setDefaultAddress(addresses.find((address) => address.is_default) ?? addresses[0] ?? null);
+          if (!cancelled) {
+            const addr = addresses.find((a) => a.is_default) ?? addresses[0] ?? null;
+            setDefaultAddress(addr);
+            setDeliveryAddress(addr);
+          }
         })
         .catch(() => {
           // Address loading should never block the catalogue from rendering.
@@ -104,7 +111,7 @@ export function HomeScreen() {
       return () => {
         cancelled = true;
       };
-    }, []),
+    }, [setDeliveryAddress]),
   );
 
   const { rails, categories } = useMemo(() => buildRails(products), [products]);
@@ -211,13 +218,34 @@ export function HomeScreen() {
       {isLoading ? (
         <HomeSkeleton />
       ) : error ? (
-        <ErrorState message={error} onRetry={refresh} style={styles.errorState} />
+        <ScrollView
+          style={styles.flex}
+          contentContainerStyle={styles.errorScroll}
+          refreshControl={
+            <RefreshControl refreshing={isRefreshing} onRefresh={refresh} tintColor={colors.primary} colors={[colors.primary]} />
+          }
+        >
+          <ErrorState message={error} onRetry={refresh} />
+          <View style={styles.debugBox}>
+            <AppText variant="captionStrong" color="textTertiary">DEBUG — pull down to retry</AppText>
+            <AppText variant="caption" color="textTertiary" style={styles.debugLine}>API: {API_BASE_URL}</AppText>
+            <AppText variant="caption" color="textTertiary" style={styles.debugLine}>Error: {error}</AppText>
+          </View>
+        </ScrollView>
       ) : rails.length === 0 ? (
-        <ErrorState
-          message="No stores delivering to this location yet."
-          onRetry={refresh}
-          style={styles.errorState}
-        />
+        <ScrollView
+          style={styles.flex}
+          contentContainerStyle={styles.errorScroll}
+          refreshControl={
+            <RefreshControl refreshing={isRefreshing} onRefresh={refresh} tintColor={colors.primary} colors={[colors.primary]} />
+          }
+        >
+          <ErrorState message="No stores delivering to this location yet." onRetry={refresh} />
+          <View style={styles.debugBox}>
+            <AppText variant="captionStrong" color="textTertiary">DEBUG — pull down to retry</AppText>
+            <AppText variant="caption" color="textTertiary" style={styles.debugLine}>API: {API_BASE_URL}</AppText>
+          </View>
+        </ScrollView>
       ) : (
         <Animated.View entering={FadeIn.duration(240)} style={styles.flex}>
           <FlatList
@@ -269,6 +297,9 @@ const styles = StyleSheet.create({
   categoryList: { paddingHorizontal: layout.gutter },
   listContent: { paddingBottom: spacing.xxl },
   errorState: { flex: 1 },
+  errorScroll: { flexGrow: 1 },
+  debugBox: { marginHorizontal: layout.gutter, marginBottom: spacing.xl, padding: spacing.md, backgroundColor: colors.canvas, borderRadius: 8 },
+  debugLine: { marginTop: spacing.xs },
   footer: { paddingHorizontal: layout.gutter, paddingBottom: spacing.xxl },
   footerRule: { height: 1, backgroundColor: colors.border },
 });

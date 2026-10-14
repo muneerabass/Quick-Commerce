@@ -63,40 +63,42 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
   const [isHydrated, setIsHydrated] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const loadInventory = useCallback(async (storeId: string | null) => {
+  // Products are strictly per-store, so items AND their stock load together for
+  // the selected store. Switching store reloads both.
+  const loadStoreData = useCallback(async (storeId: string | null) => {
     if (!storeId) {
       setInventory([]);
+      setProducts([]);
       return;
     }
-    try {
-      setInventory(await adminService.listInventory(storeId));
-    } catch {
-      setInventory([]);
-    }
+    const [productsList, inventoryList] = await Promise.all([
+      adminService.listProducts(storeId).catch(() => [] as typeof products),
+      adminService.listInventory(storeId).catch(() => [] as Inventory[]),
+    ]);
+    setProducts(productsList);
+    setInventory(inventoryList);
   }, []);
 
   const refresh = useCallback(async () => {
     setIsRefreshing(true);
     try {
-      const [storesList, productsList, categoriesList, savedStoreId] = await Promise.all([
+      const [storesList, categoriesList, savedStoreId] = await Promise.all([
         adminService.listStores(),
-        adminService.listProducts(),
         adminService.listCategories().catch(() => []),
         storage.get<string>(StorageKeys.adminActiveStoreId),
       ]);
       setStores(storesList);
-      setProducts(productsList);
       setCategories(categoriesList);
       const next = savedStoreId && storesList.some((s) => s.id === savedStoreId)
         ? savedStoreId
         : storesList[0]?.id ?? null;
       setActiveStoreId(next);
-      await loadInventory(next);
+      await loadStoreData(next);
     } finally {
       setIsHydrated(true);
       setIsRefreshing(false);
     }
-  }, [loadInventory]);
+  }, [loadStoreData]);
 
   useEffect(() => {
     void refresh();
@@ -106,9 +108,9 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
     (storeId: string) => {
       setActiveStoreId(storeId);
       void storage.set(StorageKeys.adminActiveStoreId, storeId);
-      void loadInventory(storeId);
+      void loadStoreData(storeId);
     },
-    [loadInventory],
+    [loadStoreData],
   );
 
   const saveStore = useCallback(
@@ -126,20 +128,20 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
     async (input: adminService.ProductInput, existingId?: string) => {
       const product = existingId
         ? await adminService.updateProduct(existingId, input)
-        : await adminService.createProduct(input);
-      await refresh();
+        : await adminService.createProduct({ ...input, store_id: activeStoreId ?? undefined });
+      await loadStoreData(activeStoreId);
       return product;
     },
-    [refresh],
+    [activeStoreId, loadStoreData],
   );
 
   const setInventoryFor = useCallback(
     async (productId: string, quantity: number) => {
       if (!activeStoreId) return;
       await adminService.setInventory(activeStoreId, productId, quantity);
-      await loadInventory(activeStoreId);
+      await loadStoreData(activeStoreId);
     },
-    [activeStoreId, loadInventory],
+    [activeStoreId, loadStoreData],
   );
 
   const createDeliveryUser = useCallback(

@@ -6,7 +6,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { AppText, Button, PressableScale } from '../../components';
 import * as deliveryService from '../../services/deliveryService';
-import * as orderService from '../../services/orderService';
+import { useDelivery } from '../../context/DeliveryContext';
 import { Order } from '../../types';
 import { formatPrice } from '../../utils/price';
 import { colors, layout, radius, spacing } from '../../theme';
@@ -15,17 +15,19 @@ import type { DeliveryStackParamList } from '../../navigation/types';
 type Props = NativeStackScreenProps<DeliveryStackParamList, 'DeliveryOrderDetails'>;
 
 export function DeliveryOrderDetailsScreen({ navigation, route }: Props) {
+  const { accept, complete } = useDelivery();
   const [order, setOrder] = useState<Order | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [isMutating, setIsMutating] = useState(false);
 
   const load = useCallback(async () => {
+    setLoadError(null);
     try {
-      // Delivery users can read any order they're allowed to touch via /orders/:id.
-      const next = await orderService.getOrder(route.params.orderId);
+      const next = await deliveryService.getDeliveryOrder(route.params.orderId);
       setOrder(next);
-    } catch {
-      Alert.alert('Could not load order', 'The order may no longer be available.');
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : 'Could not load order.');
     } finally {
       setIsLoading(false);
     }
@@ -38,14 +40,16 @@ export function DeliveryOrderDetailsScreen({ navigation, route }: Props) {
   const handleAccept = useCallback(async () => {
     setIsMutating(true);
     try {
-      const next = await deliveryService.acceptOrder(route.params.orderId);
-      setOrder(next);
-    } catch (error) {
-      Alert.alert('Could not accept', error instanceof Error ? error.message : 'Try again.');
+      const result = await accept(route.params.orderId);
+      if (result.ok) {
+        await load();
+      } else {
+        Alert.alert('Could not accept', result.message ?? 'Try again.');
+      }
     } finally {
       setIsMutating(false);
     }
-  }, [route.params.orderId]);
+  }, [accept, load, route.params.orderId]);
 
   const handleComplete = useCallback(async () => {
     Alert.alert('Mark delivered?', 'This also marks payment collected.', [
@@ -56,17 +60,19 @@ export function DeliveryOrderDetailsScreen({ navigation, route }: Props) {
         onPress: async () => {
           setIsMutating(true);
           try {
-            const next = await deliveryService.completeOrder(route.params.orderId);
-            setOrder(next);
-          } catch (error) {
-            Alert.alert('Could not complete', error instanceof Error ? error.message : 'Try again.');
+            const result = await complete(route.params.orderId);
+            if (result.ok) {
+              await load();
+            } else {
+              Alert.alert('Could not complete', result.message ?? 'Try again.');
+            }
           } finally {
             setIsMutating(false);
           }
         },
       },
     ]);
-  }, [route.params.orderId]);
+  }, [complete, load, route.params.orderId]);
 
   const openMaps = useCallback(() => {
     if (!order) return;
@@ -82,10 +88,36 @@ export function DeliveryOrderDetailsScreen({ navigation, route }: Props) {
     void Linking.openURL(`tel:${order.delivery_phone}`);
   }, [order]);
 
-  if (isLoading || !order) {
+  if (isLoading) {
     return (
       <SafeAreaView style={styles.screen} edges={['top']}>
         <ActivityIndicator color={colors.primary} style={styles.loader} />
+      </SafeAreaView>
+    );
+  }
+
+  if (loadError || !order) {
+    return (
+      <SafeAreaView style={styles.screen} edges={['top']}>
+        <View style={styles.header}>
+          <PressableScale onPress={() => navigation.goBack()} scaleTo={0.9} haptic="none" style={styles.backButton}>
+            <Ionicons name="arrow-back" size={22} color={colors.text} />
+          </PressableScale>
+          <View style={styles.titleBlock}>
+            <AppText variant="heading2">Order unavailable</AppText>
+          </View>
+        </View>
+        <View style={styles.errorBlock}>
+          <Ionicons name="alert-circle-outline" size={32} color={colors.textTertiary} />
+          <AppText variant="bodyStrong" style={styles.errorTitle}>
+            Could not load this order
+          </AppText>
+          <AppText variant="bodySmall" color="textSecondary" style={styles.errorMessage}>
+            {loadError ?? 'The order may have been accepted by another rider or completed already.'}
+          </AppText>
+          <Button label="Try again" onPress={() => { setIsLoading(true); void load(); }} style={styles.errorButton} />
+          <Button label="Back" variant="ghost" onPress={() => navigation.goBack()} />
+        </View>
       </SafeAreaView>
     );
   }
@@ -220,4 +252,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.successSoft,
   },
   doneLabel: { marginLeft: spacing.sm },
+  errorBlock: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: layout.gutter },
+  errorTitle: { marginTop: spacing.md },
+  errorMessage: { marginTop: spacing.sm, textAlign: 'center', maxWidth: 280 },
+  errorButton: { marginTop: spacing.lg, alignSelf: 'stretch' },
 });

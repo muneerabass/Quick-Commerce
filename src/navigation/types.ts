@@ -57,8 +57,14 @@ export type AdminStackParamList = {
   DeliveryUsers: undefined;
 };
 
+export type DeliveryTabParamList = {
+  Available: undefined;
+  Active: undefined;
+  History: undefined;
+};
+
 export type DeliveryStackParamList = {
-  DeliveryHome: undefined;
+  DeliveryTabs: NavigatorScreenParams<DeliveryTabParamList> | undefined;
   DeliveryOrderDetails: { orderId: string };
 };
 

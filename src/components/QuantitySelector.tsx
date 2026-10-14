@@ -3,13 +3,13 @@ import { Pressable, StyleProp, StyleSheet, View, ViewStyle } from 'react-native'
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import Animated, {
+  Easing,
   FadeIn,
   FadeOut,
   interpolateColor,
   useAnimatedStyle,
   useDerivedValue,
   useSharedValue,
-  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import { AppText } from './AppText';
@@ -36,9 +36,6 @@ const METRICS: Record<Size, { height: number; collapsed: number; expanded: numbe
     lg: { height: 46, collapsed: 132, expanded: 132, icon: 20 },
   };
 
-/** Settles quickly with a barely-perceptible overshoot — the width change should feel mechanical. */
-const WIDTH_SPRING = { damping: 20, stiffness: 260, mass: 0.6 } as const;
-
 /**
  * The add-to-cart control.
  *
@@ -63,7 +60,7 @@ export const QuantitySelector = React.memo(function QuantitySelector({
   const progress = useSharedValue(isActive ? 1 : 0);
 
   useEffect(() => {
-    progress.value = withSpring(isActive ? 1 : 0, WIDTH_SPRING);
+    progress.value = withTiming(isActive ? 1 : 0, { duration: 200, easing: Easing.out(Easing.cubic) });
   }, [isActive, progress]);
 
   const width = useDerivedValue(() =>

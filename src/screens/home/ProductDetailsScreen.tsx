@@ -1,5 +1,5 @@
-import React, { useCallback, useMemo } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { NativeScrollEvent, NativeSyntheticEvent, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
@@ -33,6 +33,7 @@ export function ProductDetailsScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   const { getQuantity, addItem, decrementByProductId, totals } = useCart();
   const { getProductById, products } = useStore();
+  const [activeImage, setActiveImage] = useState(0);
 
   const product = getProductById(route.params.productId);
 
@@ -71,6 +72,12 @@ export function ProductDetailsScreen({ navigation, route }: Props) {
   const inStock = product.quantity > 0;
   const look = lookForCategory(product.category_id);
   const tint = look.tint;
+  const heroSize = Math.min(layout.screenWidth * 0.62, 260);
+  const gallery = product.images?.length ? product.images : product.image_url ? [product.image_url] : [];
+  const onGalleryScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const index = Math.round(e.nativeEvent.contentOffset.x / layout.screenWidth);
+    setActiveImage(index);
+  };
 
   return (
     <View style={styles.screen}>
@@ -106,14 +113,47 @@ export function ProductDetailsScreen({ navigation, route }: Props) {
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 110 }]}
       >
         <View style={[styles.hero, { backgroundColor: tint, paddingTop: insets.top + 64 }]}>
-          <ProductImage
-            uri={product.image_url}
-            fallbackText={product.name}
-            size={Math.min(layout.screenWidth * 0.62, 260)}
-            tint={tint}
-            radiusToken="lg"
-            contentFit="cover"
-          />
+          {gallery.length > 1 ? (
+            <>
+              <ScrollView
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                onMomentumScrollEnd={onGalleryScroll}
+                style={styles.gallery}
+              >
+                {gallery.map((uri, index) => (
+                  <View key={`${uri}-${index}`} style={[styles.gallerySlide, { width: layout.screenWidth }]}>
+                    <ProductImage
+                      uri={uri}
+                      fallbackText={product.name}
+                      size={heroSize}
+                      tint={tint}
+                      radiusToken="lg"
+                      contentFit="cover"
+                    />
+                  </View>
+                ))}
+              </ScrollView>
+              <View style={styles.dots}>
+                {gallery.map((uri, index) => (
+                  <View
+                    key={`dot-${uri}-${index}`}
+                    style={[styles.dot, index === activeImage ? styles.dotActive : styles.dotInactive]}
+                  />
+                ))}
+              </View>
+            </>
+          ) : (
+            <ProductImage
+              uri={gallery[0] ?? product.image_url}
+              fallbackText={product.name}
+              size={heroSize}
+              tint={tint}
+              radiusToken="lg"
+              contentFit="cover"
+            />
+          )}
         </View>
 
         <Animated.View entering={FadeInDown.duration(300)} style={styles.body}>
@@ -220,6 +260,12 @@ const styles = StyleSheet.create({
   },
   content: { flexGrow: 1 },
   hero: { alignItems: 'center', justifyContent: 'center', paddingBottom: spacing.xxxl },
+  gallery: { alignSelf: 'stretch' },
+  gallerySlide: { alignItems: 'center', justifyContent: 'center' },
+  dots: { flexDirection: 'row', gap: spacing.xs, marginTop: spacing.lg },
+  dot: { height: 7, borderRadius: radius.pill },
+  dotActive: { width: 20, backgroundColor: colors.primary },
+  dotInactive: { width: 7, backgroundColor: colors.borderStrong },
   body: { paddingHorizontal: layout.gutter, paddingTop: spacing.xl },
   name: { marginBottom: spacing.sm },
   divider: { height: 1, backgroundColor: colors.border, marginVertical: spacing.xl },

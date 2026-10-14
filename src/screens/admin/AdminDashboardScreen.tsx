@@ -1,6 +1,6 @@
-import React, { useCallback } from 'react';
-import { ActivityIndicator, Alert, FlatList, ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import React from 'react';
+import { ActivityIndicator, FlatList, ScrollView, StyleSheet, View } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -11,6 +11,7 @@ import {
   Button,
   PressableScale,
   StatusPill,
+  StoreSwitcher,
 } from '../../components';
 import { useAdmin } from '../../context/AdminContext';
 import { useAuth } from '../../context/AuthContext';
@@ -21,10 +22,9 @@ type Navigation = NativeStackNavigationProp<AdminStackParamList>;
 
 export function AdminDashboardScreen() {
   const navigation = useNavigation<Navigation>();
+  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const {
-    stores,
-    activeStore,
     products,
     categories,
     lowStockProducts,
@@ -32,18 +32,7 @@ export function AdminDashboardScreen() {
     isHydrated,
     isRefreshing,
     refresh,
-    selectStore,
   } = useAdmin();
-
-  const showStorePicker = useCallback(() => {
-    if (stores.length === 0) return;
-    const buttons: { text: string; onPress?: () => void; style?: 'cancel' | 'default' | 'destructive' }[] = stores.map((store) => ({
-      text: store.name,
-      onPress: () => selectStore(store.id),
-    }));
-    buttons.push({ text: 'Cancel', style: 'cancel' });
-    Alert.alert('Select active store', undefined, buttons);
-  }, [selectStore, stores]);
 
   if (!isHydrated) {
     return (
@@ -55,21 +44,10 @@ export function AdminDashboardScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.xl }]} showsVerticalScrollIndicator={false}>
         <AdminScreenHeader title={`Hi ${user?.name ?? 'admin'}`} subtitle="Running the Quick-Commerce back office." />
 
-        <PressableScale onPress={showStorePicker} scaleTo={0.985} haptic="none" style={styles.storeCard}>
-          <Ionicons name="storefront-outline" size={20} color={colors.primary} />
-          <View style={styles.storeCopy}>
-            <AppText variant="captionStrong">ACTIVE STORE</AppText>
-            <AppText variant="bodyStrong">
-              {activeStore?.name ?? (stores.length === 0 ? 'No stores yet — create one' : 'Pick a store')}
-            </AppText>
-          </View>
-          <AppText variant="button" color="primary">
-            Change
-          </AppText>
-        </PressableScale>
+        <StoreSwitcher style={styles.storeCard} />
 
         <View style={styles.statsRow}>
           <AdminStatCard label="Products" value={products.length} icon="cube-outline" />
@@ -169,18 +147,8 @@ export function AdminDashboardScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   loader: { flex: 1 },
-  content: { paddingHorizontal: spacing.lg, paddingTop: spacing.xl, paddingBottom: spacing.huge },
-  storeCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing.lg,
-    marginTop: spacing.lg,
-    marginBottom: spacing.lg,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
-    ...shadows.soft,
-  },
-  storeCopy: { flex: 1, marginHorizontal: spacing.md },
+  content: { paddingHorizontal: spacing.lg, paddingTop: spacing.xl },
+  storeCard: { marginTop: spacing.lg, marginBottom: spacing.lg },
   statsRow: { flexDirection: 'row', gap: spacing.md },
   statsSecondRow: { marginTop: spacing.md },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.xxxl, marginBottom: spacing.md },

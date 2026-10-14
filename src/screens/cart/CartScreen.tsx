@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
@@ -61,6 +61,7 @@ function FreeDeliveryBar({ subtotal, remaining }: { subtotal: number; remaining:
 
 export function CartScreen() {
   const navigation = useNavigation<Navigation>();
+  const insets = useSafeAreaInsets();
   const { items, totals, clearCart, refresh } = useCart();
   const [isPlacing, setIsPlacing] = useState(false);
   const [addresses, setAddresses] = useState<Address[]>([]);
@@ -170,7 +171,7 @@ export function CartScreen() {
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[styles.listContent, { paddingBottom: 72 + Math.max(insets.bottom, spacing.md) }]}
         ListHeaderComponent={
           <FreeDeliveryBar subtotal={totals.subtotal} remaining={totals.amountToFreeDelivery} />
         }
@@ -198,7 +199,7 @@ export function CartScreen() {
         itemLayoutAnimation={LinearTransition.duration(220)}
       />
 
-      <View style={styles.checkoutBar}>
+      <View style={[styles.checkoutBar, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
         <View style={styles.checkoutTotal}>
           <AppText variant="caption" color="textTertiary">
             To pay
@@ -246,7 +247,7 @@ const styles = StyleSheet.create({
   },
   clearLabel: { marginLeft: spacing.xs },
   emptyWrap: { flex: 1, backgroundColor: colors.background, justifyContent: 'center' },
-  listContent: { paddingTop: spacing.lg, paddingBottom: 190 },
+  listContent: { paddingTop: spacing.lg },
   itemSeparator: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginLeft: 84 },
   deliveryCard: {
     marginHorizontal: layout.gutter,
@@ -285,7 +286,7 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
     paddingHorizontal: layout.gutter,
-    paddingVertical: spacing.md,
+    paddingTop: spacing.md,
     ...shadows.floating,
   },
   checkoutTotal: { flex: 1 },

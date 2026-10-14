@@ -115,11 +115,28 @@ export function AddressFormScreen({ navigation, route }: Props) {
         return;
       }
       const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      setForm((prev) => ({
-        ...prev,
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-      }));
+      const { latitude, longitude } = position.coords;
+
+      // Reverse-geocode to auto-fill address fields.
+      let patch: Partial<FormState> = { latitude, longitude };
+      try {
+        const results = await Location.reverseGeocodeAsync({ latitude, longitude });
+        const hit = results[0];
+        if (hit) {
+          const line1 = [hit.name, hit.street].filter(Boolean).join(', ');
+          patch = {
+            ...patch,
+            address_line1: line1 || undefined,
+            city: hit.city ?? undefined,
+            state: hit.region ?? undefined,
+            pincode: hit.postalCode ?? undefined,
+          } as Partial<FormState>;
+        }
+      } catch {
+        // Geocode failed — lat/lng still set, fields stay as-is.
+      }
+
+      setForm((prev) => ({ ...prev, ...patch }));
     } catch (error) {
       Alert.alert('Could not get location', error instanceof Error ? error.message : 'Try again.');
     } finally {
@@ -233,9 +250,9 @@ export function AddressFormScreen({ navigation, route }: Props) {
             </AppText>
           </PressableScale>
 
-          <PressableScale onPress={handleLocate} scaleTo={0.98} haptic="none" style={styles.locateButtonGhost}>
-            <Ionicons name="locate" size={16} color={colors.textSecondary} />
-            <AppText variant="caption" color="textSecondary" style={styles.locateLabel}>
+          <PressableScale onPress={handleLocate} scaleTo={0.98} haptic="light" style={styles.locateButtonPrimary}>
+            <Ionicons name="locate" size={18} color={colors.textInverse} />
+            <AppText variant="button" style={styles.locateButtonLabel}>
               {isLocating ? 'Fetching location…' : 'Use my current location'}
             </AppText>
           </PressableScale>
@@ -282,13 +299,18 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primarySoft,
     marginTop: spacing.lg,
   },
-  locateButtonGhost: {
+  locateButtonPrimary: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.primary,
+    marginTop: spacing.sm,
     marginBottom: spacing.lg,
+    gap: spacing.sm,
   },
+  locateButtonLabel: { color: colors.textInverse },
   locateLabel: { marginLeft: spacing.sm },
   submit: { marginTop: spacing.md },
 });

@@ -9,7 +9,6 @@ import Animated, {
   useSharedValue,
   withDelay,
   withSequence,
-  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import { AppText } from '../components';
@@ -39,12 +38,12 @@ export function SplashScreen({ onAnimationComplete }: SplashScreenProps) {
   useEffect(() => {
     markOpacity.value = withTiming(1, { duration: 320, easing: Easing.out(Easing.quad) });
     markScale.value = withSequence(
-      withSpring(1.04, { damping: 14, stiffness: 180, mass: 0.7 }),
-      withSpring(1, { damping: 18, stiffness: 220 }),
+      withTiming(1.03, { duration: 200, easing: Easing.out(Easing.quad) }),
+      withTiming(1, { duration: 220, easing: Easing.inOut(Easing.quad) }),
     );
 
     wordmarkOpacity.value = withDelay(220, withTiming(1, { duration: 300 }));
-    wordmarkTranslate.value = withDelay(220, withSpring(0, { damping: 18, stiffness: 200 }));
+    wordmarkTranslate.value = withDelay(220, withTiming(0, { duration: 260, easing: Easing.out(Easing.quad) }));
 
     taglineOpacity.value = withDelay(420, withTiming(1, { duration: 320 }));
 

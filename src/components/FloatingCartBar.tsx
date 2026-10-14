@@ -31,7 +31,7 @@ export const FloatingCartBar = React.memo(function FloatingCartBar({
 
   return (
     <Animated.View
-      entering={FadeInDown.duration(260).springify().damping(20)}
+      entering={FadeInDown.duration(240)}
       exiting={FadeOutDown.duration(180)}
       style={[
         styles.wrap,

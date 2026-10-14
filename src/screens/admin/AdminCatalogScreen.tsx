@@ -1,10 +1,10 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { FlatList, StyleSheet, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
-import { AdminScreenHeader, AppText, Button, EmptyState, PressableScale, ProductImage } from '../../components';
+import { AdminScreenHeader, AppText, Button, EmptyState, PressableScale, ProductImage, StoreSwitcher } from '../../components';
 import { useAdmin } from '../../context/AdminContext';
 import { AdminProduct } from '../../types';
 import { formatPrice } from '../../utils/price';
@@ -15,7 +15,8 @@ type Navigation = NativeStackNavigationProp<AdminStackParamList>;
 
 export function AdminCatalogScreen() {
   const navigation = useNavigation<Navigation>();
-  const { products } = useAdmin();
+  const insets = useSafeAreaInsets();
+  const { products, activeStore } = useAdmin();
   const [search, setSearch] = useState('');
 
   const filtered = useMemo(() => {
@@ -49,7 +50,11 @@ export function AdminCatalogScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <AdminScreenHeader title="Catalog" subtitle="Create and edit products." />
+      <View style={styles.headerPad}>
+        <AdminScreenHeader title="Catalog" subtitle="Each store has its own items." />
+      </View>
+
+      <StoreSwitcher style={styles.switcher} />
 
       <View style={styles.searchWrap}>
         <Ionicons name="search" size={18} color={colors.textSecondary} />
@@ -74,10 +79,14 @@ export function AdminCatalogScreen() {
         data={filtered}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + spacing.xl }]}
         ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
         ListEmptyComponent={
-          <EmptyState emoji="🛒" title="No products" message="Create your first product to see it here." />
+          <EmptyState
+            emoji="🛒"
+            title={activeStore ? `No items in ${activeStore.name}` : 'No products'}
+            message={activeStore ? 'Add your first product for this store.' : 'Create a store first, then add products.'}
+          />
         }
       />
     </SafeAreaView>
@@ -86,6 +95,8 @@ export function AdminCatalogScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
+  headerPad: { paddingHorizontal: spacing.lg },
+  switcher: { marginHorizontal: spacing.lg, marginBottom: spacing.md },
   searchWrap: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -97,7 +108,7 @@ const styles = StyleSheet.create({
   },
   searchInput: { flex: 1, ...typography.body, fontSize: 15, color: colors.text, marginHorizontal: spacing.md, paddingVertical: 0 },
   addButton: { marginHorizontal: spacing.lg, marginTop: spacing.md },
-  listContent: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.huge },
+  listContent: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -2,15 +2,13 @@ import React, { useCallback } from 'react';
 import { Pressable, PressableProps, StyleProp, ViewStyle } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import Animated, {
+  Easing,
   useAnimatedStyle,
   useSharedValue,
-  withSpring,
+  withTiming,
 } from 'react-native-reanimated';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
-
-/** Tuned to settle in ~150ms with no visible overshoot — a press cue, not a bounce. */
-const SPRING = { damping: 18, stiffness: 320, mass: 0.5 } as const;
 
 interface PressableScaleProps extends Omit<PressableProps, 'style'> {
   children: React.ReactNode;
@@ -40,11 +38,11 @@ export function PressableScale({
   }));
 
   const handlePressIn = useCallback(() => {
-    scale.value = withSpring(scaleTo, SPRING);
+    scale.value = withTiming(scaleTo, { duration: 100, easing: Easing.out(Easing.quad) });
   }, [scale, scaleTo]);
 
   const handlePressOut = useCallback(() => {
-    scale.value = withSpring(1, SPRING);
+    scale.value = withTiming(1, { duration: 180, easing: Easing.out(Easing.quad) });
   }, [scale]);
 
   const handlePress = useCallback<NonNullable<PressableProps['onPress']>>(

@@ -5,10 +5,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import Animated, {
+  Easing,
   interpolate,
   useAnimatedStyle,
   useSharedValue,
-  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import { AppText, CartBadge } from '../components';
@@ -25,8 +25,6 @@ const ICONS: Record<TabName, { active: keyof typeof Ionicons.glyphMap; inactive:
   Profile: { active: 'person', inactive: 'person-outline' },
 };
 
-const SPRING = { damping: 16, stiffness: 240, mass: 0.5 } as const;
-
 interface TabItemProps {
   name: TabName;
   label: string;
@@ -40,7 +38,7 @@ function TabItem({ name, label, isFocused, onPress, onLongPress, badgeCount }: T
   const focus = useSharedValue(isFocused ? 1 : 0);
 
   useEffect(() => {
-    focus.value = withSpring(isFocused ? 1 : 0, SPRING);
+    focus.value = withTiming(isFocused ? 1 : 0, { duration: 180, easing: Easing.out(Easing.quad) });
   }, [isFocused, focus]);
 
   const iconStyle = useAnimatedStyle(() => ({

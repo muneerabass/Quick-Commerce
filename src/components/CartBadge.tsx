@@ -1,10 +1,10 @@
 import React, { useEffect, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, {
+  Easing,
   useAnimatedStyle,
   useSharedValue,
   withSequence,
-  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import { AppText } from './AppText';
@@ -13,8 +13,6 @@ import { colors, radius } from '../theme';
 interface CartBadgeProps {
   count: number;
 }
-
-const POP_SPRING = { damping: 12, stiffness: 340, mass: 0.5 } as const;
 
 /**
  * Count bubble on the cart tab. Pops on every change so an add registers even when the
@@ -28,10 +26,10 @@ export const CartBadge = React.memo(function CartBadge({ count }: CartBadgeProps
     if (count === 0) {
       scale.value = withTiming(0, { duration: 140 });
     } else if (previous.current === 0) {
-      scale.value = withSpring(1, POP_SPRING);
+      scale.value = withTiming(1, { duration: 160, easing: Easing.out(Easing.quad) });
     } else if (previous.current !== count) {
-      // Already visible: a quick overshoot reads as "that registered".
-      scale.value = withSequence(withSpring(1.22, POP_SPRING), withSpring(1, POP_SPRING));
+      // Already visible: a brief scale-up confirms the tap registered.
+      scale.value = withSequence(withTiming(1.12, { duration: 80 }), withTiming(1, { duration: 140 }));
     }
     previous.current = count;
   }, [count, scale]);

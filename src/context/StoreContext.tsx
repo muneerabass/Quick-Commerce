@@ -7,9 +7,10 @@ import React, {
   useState,
 } from 'react';
 import { nearby } from '../services/catalogService';
+import { listAddresses } from '../services/addressService';
 import { storage, StorageKeys } from '../services/storage';
 import { useUserLocation } from '../hooks/useUserLocation';
-import { NearbyStore, Product, Store } from '../types';
+import { Address, NearbyStore, Product, Store } from '../types';
 
 interface StoreContextValue {
   isLoading: boolean;
@@ -24,6 +25,8 @@ interface StoreContextValue {
   getProductById: (productId: string) => Product | undefined;
   /** True when the user denied / errored out on location. */
   isFallbackLocation: boolean;
+  /** Push a new delivery address so nearby stores re-fetch around it. */
+  setDeliveryAddress: (address: Address | null) => void;
 }
 
 const StoreContext = createContext<StoreContextValue | undefined>(undefined);
@@ -35,7 +38,9 @@ function flatten(nearbyStores: NearbyStore[], storeId: string | null): Product[]
 }
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
-  const location = useUserLocation();
+  const gps = useUserLocation();
+  // Delivery address coords take priority over GPS for the nearby query.
+  const [deliveryAddress, setDeliveryAddressState] = useState<Address | null>(null);
   const [nearbyStores, setNearbyStores] = useState<NearbyStore[]>([]);
   const [activeStoreId, setActiveStoreId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -50,15 +55,33 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     })();
   }, []);
 
+  // Load the default delivery address on mount so the nearby query is address-based.
+  useEffect(() => {
+    (async () => {
+      try {
+        const addresses = await listAddresses();
+        const def = addresses.find((a) => a.is_default) ?? addresses[0] ?? null;
+        setDeliveryAddressState(def);
+      } catch {
+        // No addresses yet — fall back to GPS silently.
+      }
+    })();
+  }, []);
+
+  // Resolved coords: prefer delivery address lat/lng, fall back to GPS.
+  const queryLat = (deliveryAddress?.latitude != null ? deliveryAddress.latitude : null) ?? gps.latitude;
+  const queryLng = (deliveryAddress?.longitude != null ? deliveryAddress.longitude : null) ?? gps.longitude;
+  const locationReady = deliveryAddress != null || gps.status !== 'loading';
+
   const load = useCallback(
     async (silent = false) => {
-      if (location.status === 'loading') return;
+      if (!locationReady) return;
       if (silent) setIsRefreshing(true); else setIsLoading(true);
       setError(null);
       try {
         const list = await nearby({
-          latitude: location.latitude,
-          longitude: location.longitude,
+          latitude: queryLat,
+          longitude: queryLng,
           radiusKm: 25,
         });
         setNearbyStores(list);
@@ -73,7 +96,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         setIsRefreshing(false);
       }
     },
-    [location.latitude, location.longitude, location.status],
+    [locationReady, queryLat, queryLng],
   );
 
   useEffect(() => {
@@ -83,6 +106,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const selectStore = useCallback((storeId: string) => {
     setActiveStoreId(storeId);
     void storage.set(StorageKeys.activeStoreId, storeId);
+  }, []);
+
+  const setDeliveryAddress = useCallback((address: Address | null) => {
+    setDeliveryAddressState(address);
   }, []);
 
   const products = useMemo(() => flatten(nearbyStores, activeStoreId), [activeStoreId, nearbyStores]);
@@ -98,9 +125,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       selectStore,
       refresh: () => load(true),
       getProductById: (productId) => products.find((p) => p.id === productId),
-      isFallbackLocation: location.isFallback,
+      isFallbackLocation: gps.isFallback && deliveryAddress == null,
+      setDeliveryAddress,
     }),
-    [activeStoreId, error, isLoading, isRefreshing, load, location.isFallback, nearbyStores, products, selectStore],
+    [activeStoreId, deliveryAddress, error, gps.isFallback, isLoading, isRefreshing, load, nearbyStores, products, selectStore, setDeliveryAddress],
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

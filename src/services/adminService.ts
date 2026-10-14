@@ -12,8 +12,10 @@ export async function listStores(): Promise<Store[]> {
   return response.stores ?? [];
 }
 
-export async function listProducts(): Promise<AdminProduct[]> {
-  const response = await api.get<{ products: AdminProduct[] }>('/admin/products', { auth: true });
+export async function listProducts(storeId?: string): Promise<AdminProduct[]> {
+  // Products are strictly per-store; scope the list to the active store.
+  const path = storeId ? `/admin/products?store_id=${encodeURIComponent(storeId)}` : '/admin/products';
+  const response = await api.get<{ products: AdminProduct[] }>(path, { auth: true });
   return response.products ?? [];
 }
 
@@ -36,12 +38,18 @@ export interface StoreInput {
 }
 
 export interface ProductInput {
+  /** Required on create: the store this product belongs to. */
+  store_id?: string;
   name: string;
   description?: string | null;
   /** Paise (minor units). */
   price: number;
   image_url?: string | null;
+  /** All product image URLs (cover first). */
+  images?: string[];
   category_id?: string | null;
+  /** Initial stock for this product at its store (create only). */
+  quantity?: number;
 }
 
 export async function createStore(input: StoreInput): Promise<Store> {

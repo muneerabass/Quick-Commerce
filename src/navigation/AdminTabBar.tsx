@@ -1,6 +1,7 @@
 import React from 'react';
 import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { AppText } from '../components';
 import { colors, radius, shadows, spacing } from '../theme';
@@ -16,8 +17,9 @@ const ICONS: Record<AdminTab, { active: keyof typeof Ionicons.glyphMap; inactive
 };
 
 export function AdminTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+  const insets = useSafeAreaInsets();
   return (
-    <View style={styles.bar}>
+    <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, spacing.sm) }]}>
       {state.routes.map((route, index) => {
         const name = route.name as AdminTab;
         const focused = state.index === index;
@@ -45,7 +47,7 @@ export function AdminTabBar({ state, descriptors, navigation }: BottomTabBarProp
 }
 
 const styles = StyleSheet.create({
-  bar: { flexDirection: 'row', backgroundColor: colors.background, borderTopWidth: Platform.OS === 'ios' ? StyleSheet.hairlineWidth : 0, borderTopColor: colors.border, paddingTop: spacing.xs, paddingBottom: spacing.sm, ...shadows.tabBar },
+  bar: { flexDirection: 'row', backgroundColor: colors.background, borderTopWidth: Platform.OS === 'ios' ? StyleSheet.hairlineWidth : 0, borderTopColor: colors.border, paddingTop: spacing.xs, ...shadows.tabBar },
   tab: { flex: 1, minHeight: 58, alignItems: 'center', justifyContent: 'center', paddingTop: spacing.md, position: 'relative' },
   indicator: { position: 'absolute', top: 0, width: 26, height: 3, borderRadius: radius.pill },
   indicatorActive: { backgroundColor: colors.primary },

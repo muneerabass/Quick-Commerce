@@ -1,6 +1,6 @@
 import React, { useCallback } from 'react';
-import { Alert, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Alert, ScrollView, StyleSheet, View } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,6 +14,7 @@ type Navigation = NativeStackNavigationProp<AdminStackParamList>;
 
 export function AdminMoreScreen() {
   const navigation = useNavigation<Navigation>();
+  const insets = useSafeAreaInsets();
   const { logout, user } = useAuth();
   const { activeStore } = useAdmin();
 
@@ -26,45 +27,48 @@ export function AdminMoreScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <AdminScreenHeader title="Settings" subtitle={activeStore ? `Signed in as ${user?.name ?? 'admin'} · ${activeStore.name}` : `Signed in as ${user?.name ?? 'admin'}`} />
-      <View style={styles.card}>
-        <PressableScale style={styles.row} onPress={() => navigation.navigate('Stores')} haptic="none">
-          <Ionicons name="storefront-outline" size={20} color={colors.text} />
-          <AppText variant="bodyStrong" style={styles.rowLabel}>
-            Stores
-          </AppText>
-          <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
-        </PressableScale>
-        <View style={styles.divider} />
-        <PressableScale style={styles.row} onPress={() => navigation.navigate('Categories')} haptic="none">
-          <Ionicons name="grid-outline" size={20} color={colors.text} />
-          <AppText variant="bodyStrong" style={styles.rowLabel}>
-            Categories
-          </AppText>
-          <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
-        </PressableScale>
-        <View style={styles.divider} />
-        <PressableScale style={styles.row} onPress={() => navigation.navigate('DeliveryUsers')} haptic="none">
-          <Ionicons name="bicycle-outline" size={20} color={colors.text} />
-          <AppText variant="bodyStrong" style={styles.rowLabel}>
-            Delivery riders
-          </AppText>
-          <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
-        </PressableScale>
-      </View>
+      <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + spacing.xl }]} showsVerticalScrollIndicator={false}>
+        <AdminScreenHeader title="Settings" subtitle={activeStore ? `Signed in as ${user?.name ?? 'admin'} · ${activeStore.name}` : `Signed in as ${user?.name ?? 'admin'}`} />
+        <View style={styles.card}>
+          <PressableScale style={styles.row} onPress={() => navigation.navigate('Stores')} haptic="none">
+            <Ionicons name="storefront-outline" size={20} color={colors.text} />
+            <AppText variant="bodyStrong" style={styles.rowLabel}>
+              Stores
+            </AppText>
+            <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
+          </PressableScale>
+          <View style={styles.divider} />
+          <PressableScale style={styles.row} onPress={() => navigation.navigate('Categories')} haptic="none">
+            <Ionicons name="grid-outline" size={20} color={colors.text} />
+            <AppText variant="bodyStrong" style={styles.rowLabel}>
+              Categories
+            </AppText>
+            <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
+          </PressableScale>
+          <View style={styles.divider} />
+          <PressableScale style={styles.row} onPress={() => navigation.navigate('DeliveryUsers')} haptic="none">
+            <Ionicons name="bicycle-outline" size={20} color={colors.text} />
+            <AppText variant="bodyStrong" style={styles.rowLabel}>
+              Delivery riders
+            </AppText>
+            <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
+          </PressableScale>
+        </View>
 
-      <PressableScale onPress={handleLogout} style={styles.logoutButton} haptic="none">
-        <Ionicons name="log-out-outline" size={19} color={colors.error} />
-        <AppText variant="button" color="error" style={styles.logoutLabel}>
-          Log out
-        </AppText>
-      </PressableScale>
+        <PressableScale onPress={handleLogout} style={styles.logoutButton} haptic="none">
+          <Ionicons name="log-out-outline" size={19} color={colors.error} />
+          <AppText variant="button" color="error" style={styles.logoutLabel}>
+            Log out
+          </AppText>
+        </PressableScale>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.background, paddingHorizontal: spacing.lg },
+  safe: { flex: 1, backgroundColor: colors.background },
+  scroll: { paddingHorizontal: spacing.lg },
   card: { marginTop: spacing.xl, backgroundColor: colors.surface, borderRadius: radius.md, ...shadows.soft, overflow: 'hidden' },
   row: { minHeight: 68, flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg },
   rowLabel: { flex: 1, marginLeft: spacing.md },

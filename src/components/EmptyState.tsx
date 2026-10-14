@@ -30,7 +30,7 @@ export const EmptyState = React.memo(function EmptyState({
 }: EmptyStateProps) {
   return (
     <Animated.View
-      entering={FadeInDown.duration(320).springify().damping(18)}
+      entering={FadeInDown.duration(300)}
       style={[styles.container, compact && styles.compact, style]}
     >
       <View style={[styles.iconRing, compact && styles.iconRingCompact]}>

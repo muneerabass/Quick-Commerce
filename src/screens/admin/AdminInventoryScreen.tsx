@@ -1,8 +1,8 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { Alert, FlatList, StyleSheet, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { AdminScreenHeader, AppText, Button, EmptyState, PressableScale, StatusPill } from '../../components';
+import { AdminScreenHeader, AppText, Button, EmptyState, PressableScale, StatusPill, StoreSwitcher } from '../../components';
 import { useAdmin } from '../../context/AdminContext';
 import { AdminProduct } from '../../types';
 import { formatPrice } from '../../utils/price';
@@ -11,6 +11,7 @@ import { colors, radius, shadows, spacing, typography } from '../../theme';
 type Filter = 'all' | 'in-stock' | 'low-stock' | 'out-of-stock';
 
 export function AdminInventoryScreen() {
+  const insets = useSafeAreaInsets();
   const { activeStore, products, lowStockLimit, setInventoryFor } = useAdmin();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
@@ -77,10 +78,14 @@ export function AdminInventoryScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <AdminScreenHeader
-        title="Inventory"
-        subtitle={activeStore ? `Managing ${activeStore.name}` : 'Pick an active store first'}
-      />
+      <View style={styles.headerPad}>
+        <AdminScreenHeader
+          title="Inventory"
+          subtitle={activeStore ? `Managing ${activeStore.name}` : 'Pick an active store first'}
+        />
+      </View>
+
+      <StoreSwitcher style={styles.switcher} />
 
       <View style={styles.searchWrap}>
         <Ionicons name="search" size={18} color={colors.textSecondary} />
@@ -113,7 +118,7 @@ export function AdminInventoryScreen() {
         data={filtered}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + spacing.xl }]}
         ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
         ListEmptyComponent={
           <EmptyState emoji="📦" title="No products" message="Create products from the Catalog tab." />
@@ -125,6 +130,8 @@ export function AdminInventoryScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
+  headerPad: { paddingHorizontal: spacing.lg },
+  switcher: { marginHorizontal: spacing.lg, marginBottom: spacing.md },
   searchWrap: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -138,7 +145,7 @@ const styles = StyleSheet.create({
   filters: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, flexWrap: 'wrap' },
   filterChip: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, backgroundColor: colors.canvas, borderRadius: radius.pill },
   filterChipActive: { backgroundColor: colors.primarySoft },
-  listContent: { paddingHorizontal: spacing.lg, paddingBottom: spacing.huge },
+  listContent: { paddingHorizontal: spacing.lg },
   row: { padding: spacing.lg, borderRadius: radius.md, backgroundColor: colors.surface, ...shadows.soft },
   rowHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   name: { flex: 1, marginRight: spacing.md },

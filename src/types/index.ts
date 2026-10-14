@@ -33,6 +33,8 @@ export interface Product {
   /** Price in paise (minor units). */
   price: number;
   image_url?: string | null;
+  /** All product images (cover first). Falls back to image_url when empty. */
+  images?: string[] | null;
   category_id?: string | null;
   /** Inventory count at the current store context (0 if not stocked). */
   quantity: number;
@@ -141,10 +143,14 @@ export interface AdminStore extends Store {}
 
 export interface AdminProduct {
   id: string;
+  /** The store this product belongs to (products are strictly per-store). */
+  store_id?: string;
   name: string;
   description?: string | null;
   price: number;
   image_url?: string | null;
+  /** All product images (cover first). */
+  images?: string[] | null;
   category_id?: string | null;
   /** Inventory at the admin's currently selected store, if known. */
   quantity?: number;
